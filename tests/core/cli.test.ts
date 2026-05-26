@@ -2171,7 +2171,8 @@ describe("installed_plugins.json installPath containment", () => {
       // Planted symlink anchor: <cacheRoot>/owner/plugin/2.0.0 -> attackerDir
       const plantedAnchor = resolve(cacheRoot, "owner", "plugin", "2.0.0");
       const fs = await import("node:fs");
-      fs.symlinkSync(attackerDir, plantedAnchor, "dir");
+      const symlinkType: "dir" | "junction" = process.platform === "win32" ? "junction" : "dir";
+      fs.symlinkSync(attackerDir, plantedAnchor, symlinkType);
 
       const cacheRootCanon = fs.realpathSync(cacheRoot);
       const cacheRootWithSep = cacheRootCanon + require("node:path").sep;

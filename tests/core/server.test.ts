@@ -2442,7 +2442,7 @@ describe("ctx_upgrade tool: inline fallback for missing CLI", () => {
     expect(serverSrc).toContain('readFileSync(join(T,"package.json"),"utf8")');
     expect(serverSrc).toContain("pkg.files");
     expect(serverSrc).toContain("Array.isArray(pkg.files)");
-    expect(serverSrc).toContain("cpSync(from,to,{recursive:true,force:true})");
+    expect(serverSrc).toContain("cpSync(from,to,{recursive:true,force:true,filter:noSymlink})");
     expect(serverSrc).toMatch(/npm.*install/);
   });
 
@@ -6294,7 +6294,8 @@ describe("ctx_index: root-level symlink defense in directory dispatch", () => {
       writeFileSync(join(realDir, "marker.txt"), "real");
 
       const fsLocal = require("node:fs") as typeof import("node:fs");
-      fsLocal.symlinkSync(realDir, linkPath, "dir");
+      const symlinkType: "dir" | "junction" = process.platform === "win32" ? "junction" : "dir";
+      fsLocal.symlinkSync(realDir, linkPath, symlinkType);
 
       const lst = fsLocal.lstatSync(linkPath);
       expect(lst.isSymbolicLink()).toBe(true);

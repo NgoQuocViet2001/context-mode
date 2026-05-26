@@ -7,14 +7,19 @@
 
 import { describe, test, assert } from "vitest";
 import { spawn, execSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { startLifecycleGuard, makeDefaultIsParentAlive } from "../src/lifecycle.js";
 
-const TSX_PATH = execSync("which tsx", { encoding: "utf-8" }).trim();
 const PROJECT_ROOT = process.cwd();
+const TSX_PATH = (() => {
+  const localBin = join(PROJECT_ROOT, "node_modules", ".bin", process.platform === "win32" ? "tsx.cmd" : "tsx");
+  if (existsSync(localBin)) return localBin;
+  const lookup = process.platform === "win32" ? "where tsx" : "which tsx";
+  return execSync(lookup, { encoding: "utf-8" }).split(/\r?\n/)[0].trim();
+})();
 // file:// URL form so the spawned ESM module can import lifecycle.ts by
 // absolute path regardless of where the script itself lives.
 const LIFECYCLE_SRC_URL = pathToFileURL(
