@@ -1,7 +1,7 @@
 // impl/08 §5 (case A/B/C pick, toolSet resolution), Assumption B4; ADR-0016 "How the subagent's tools are
 // known"; DECISIONS-r3 Q23; DEVIATIONS D-M3-E3-1..4. No regex: frontmatter is read line by line.
 // D-CI-PERF-3: node:fs through getBuiltinModule; a static ESM import of node:fs also loads fs/promises, readline and streams.
-const { readFileSync } = process.getBuiltinModule("node:fs") as typeof import("node:fs");
+const { readFileSync, readdirSync } = process.getBuiltinModule("node:fs") as typeof import("node:fs");
 import { join } from "node:path";
 import { hostText } from "../ops/host-text.ts";
 import {
@@ -44,6 +44,11 @@ export function pickSubagentCase(ev: CanonicalHookEvent, toolSet: string[] | nul
 /** §5.2. `null` = no source defines this agent type (incl. built-in types before LV8); never throws. */
 export function toolSetForAgentType(ev: CanonicalHookEvent, src: ToolSetSources): string[] | null {
   if (!isSubagentCall(ev)) return null; // step 1: the caller runs the main-session path instead
+  return declaredToolSetForAgentType(ev, src);
+}
+
+/** Declared tool inventory, also usable for a named main (--agent) caller. */
+export function declaredToolSetForAgentType(ev: CanonicalHookEvent, src: ToolSetSources): string[] | null {
   const row = getAdapter(ev.agent);
   if (src.manifestTools !== undefined) return unique(src.manifestTools.map((n) => norm(row, n)));
   const type = ev.agentType ?? "";
@@ -107,14 +112,13 @@ function readPluginAgent(claudeDir: string, type: string): AgentDef | null {
   try {
     parsed = JSON.parse(hostText(readFileSync(join(claudeDir, HOST_PLUGINS_DIR_NAME, INSTALLED_PLUGINS_FILE), "utf8")));
   } catch {
-    return null;
+    parsed = null;
   }
   const plugins = (parsed as { plugins?: Record<string, unknown> } | null)?.plugins;
-  if (plugins === null || typeof plugins !== "object") return null;
-  for (const key of Object.keys(plugins)) {
+  for (const key of plugins !== null && typeof plugins === "object" ? Object.keys(plugins) : []) {
     const at = key.indexOf(PLUGIN_KEY_SEPARATOR);
     if ((at < 0 ? key : key.slice(0, at)) !== plugin) continue;
-    const entries = plugins[key];
+    const entries = plugins![key];
     if (!Array.isArray(entries)) continue;
     for (const e of entries) {
       const dir = (e as { installPath?: unknown } | null)?.installPath;
@@ -123,7 +127,21 @@ function readPluginAgent(claudeDir: string, type: string): AgentDef | null {
       if (d !== null) return d;
     }
   }
-  return null;
+  // Claude Desktop's synced plugins are not listed in installed_plugins.json. Read only the
+  // named plugin/agent below each synced id; ambiguous copies remain unknown (fail open).
+  const synced = join(claudeDir, HOST_PLUGINS_DIR_NAME, "synced");
+  try {
+    const dirs = readdirSync(synced, { withFileTypes: true }).filter((d) => d.isDirectory());
+    if (dirs.length > 256) return null;
+    let found: AgentDef | null = null;
+    for (const dir of dirs) {
+      const def = readAgentFile(join(synced, dir.name, plugin, AGENTS_DIR_NAME, agent + AGENT_FILE_EXT));
+      if (def === null) continue;
+      if (found !== null) return null;
+      found = def;
+    }
+    return found;
+  } catch { return null; }
 }
 
 // ---------- frontmatter (line-based, no regex) ----------
@@ -147,7 +165,7 @@ function parseFrontmatter(text: string): AgentDef | null {
   const body = lines.slice(1, end);
   const tools = readList(body, FRONTMATTER_TOOLS_KEY);
   const disallowed = readList(body, FRONTMATTER_DISALLOWED_KEY);
-  return { tools: tools !== null && tools.length > 0 ? tools : null, disallowed: disallowed ?? [] };
+  return { tools, disallowed: disallowed ?? [] }; // explicit tools: [] is not inheritance
 }
 
 // `key: A, B` | `key: [A, "B"]` | `key:` followed by `- A` lines. null = key absent.

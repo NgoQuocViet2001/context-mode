@@ -89,3 +89,12 @@ LV1 confirms, rather than decides, that Claude Code ignores `allow` + `updatedIn
 r4 fix pass: split the Per agent table rows for Qwen, Copilot CLI, Pi, OpenCode 2, Gemini, VS Code and ZCode so each names its own source/mechanism and open-verification tag instead of a shared "yes"; fixed the Claude Code case B cell to match Q3 (was self-contradicting); added the deny-pipeline re-check for the `run.mjs` wrapper, the tie-break rule, the worker-thread indexing note, the Kiro no-rewrite-channel note, and the Remote-WSL/OpenCode-2 detection rows.
 - 2026-10-20 (DECISIONS-r10): main agent uses the same replace as case C.
 - 2026-11-05 (D-SUB-NOCTX-1, #1311): a subagent without ctx tools runs WebFetch/curl at PreToolUse; on a row with a replace channel, case C replaces a large output afterwards.
+## Availability-safe Claude replacements (#1342, #1343)
+
+For Claude children, declared usable tools determine the recovery route. A child with `ctx_search` keeps the existing case-A behavior. A child with a native shell gets a local `search.mjs` command instead of a pointer to an MCP tool it lacks. If the tool definition is unresolved, or neither recovery tool is available, the hook preserves the original output. This favors access to the result over a small but unusable response.
+
+Synced Claude Desktop plugin agents are resolved under the named plugin in `plugins/synced/<id>/<plugin>/agents`. Conflicting copies remain unresolved. An explicit empty `tools: []` list is distinct from an omitted tools field. A shell recovery command is checked against the existing user-deny pipeline before replacement.
+
+The local search command binds the original worktree and data root explicitly, quotes native shell arguments, and selects the numeric ID of the indexed source. It can recover output without an MCP server, even after the shell changes directory or inherits a different data-root setting. Children with repeated or absent host call IDs use child-specific source identities; main-session missing-ID hashes retain their established behavior.
+
+Default main-session replacement is unchanged. A separate proposal for main sessions whose MCP server never started (#1358) remains under evaluation; it is not part of this child fix.

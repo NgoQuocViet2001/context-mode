@@ -159,8 +159,8 @@ export function decodeClaudeShape(raw: unknown, agent: AgentId, ownPrefix: strin
   const ev: CanonicalHookEvent = { event, agent, sessionId: String(p.session_id ?? ""), cwd: String(p.cwd ?? "") };
   if (typeof p.agent_id === "string") {
     ev.agentId = p.agent_id;
-    if (typeof p.agent_type === "string") ev.agentType = p.agent_type;
   }
+  if (typeof p.agent_type === "string") ev.agentType = p.agent_type;
   if (event === "SessionStart" && typeof p.source === "string" && sources[p.source] !== undefined) ev.source = sources[p.source];
   if (event === "UserPromptSubmit" && typeof p.prompt === "string") ev.prompt = p.prompt;
   if (event === "PreToolUse" || event === "PostToolUse") {
@@ -219,8 +219,7 @@ const REQUIRED_FIELDS: Readonly<Partial<Record<CanonicalEventName, readonly stri
   PostToolUse: ["tool_name", "tool_response"],
 };
 
-// FNV-1a 32-bit, hex: a short stable id from a string. Not for security; the hook path stays free of
-// node:crypto (D-M7-HP-2).
+// Preserve the established main-session fallback identity; children need per-call identities.
 function fnv1a(s: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
@@ -246,8 +245,7 @@ export function decode(raw: unknown): CanonicalHookEvent {
   if (ev.tool !== undefined && ev.tool.name === POWERSHELL_TOOL) ev.tool.canonicalName = SHELL_CANONICAL;
   // D-FU-RF-DECODE-1 defaults. cwd: the project dir Claude Code sets for its hooks, else the hook's own cwd.
   if (ev.cwd === "") ev.cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  // tool_use_id: a label from a hash of the command and the turn, so one command in one turn keeps one source.
-  if (ev.event === "PostToolUse" && ev.tool !== undefined && ev.tool.callId === undefined) {
+  if (ev.event === "PostToolUse" && ev.tool !== undefined && ev.tool.callId === undefined && !ev.agentId) {
     const cmd = typeof ev.tool.input.command === "string" ? ev.tool.input.command : JSON.stringify(ev.tool.input);
     ev.tool.callId = "h" + fnv1a(ev.tool.name + "\0" + cmd + "\0" + String(ev.turn ?? 0));
   }

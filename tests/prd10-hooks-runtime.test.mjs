@@ -275,35 +275,32 @@ describe("PRD-v2 section 10: dispatch, replace and handle line (GP3, GP6)", () =
     assert.equal(out.stdout, "");
   });
 
-  test("case C, OUTPUT_CAP < bytes <= SYNC_INDEX_MAX_BYTES: indexed inline, whole chunks replace (F1)", async () => {
-    const text = bigText(40000);
-    const p = subagentPost(text, "reader");
-    const out = parsed(await handleHook("claude-code", p, env));
-    const replaced = out.updatedToolOutput;
-    assert.ok(Buffer.byteLength(replaced) <= REPLACE_RETURN_BYTES + 512, "within budget plus the more line");
-    assert.ok(replaced.includes("needle target"));
-    const src = query("SELECT label, bytes_total FROM sources WHERE session_id = ?", p.session_id);
-    // bytes_total is the sum of chunk bytes (store rule): the trailing newline is not a chunk byte.
-    assert.equal(src.length, 1);
-    assert.equal(src[0].label, "subagent:Read:0");
-    assert.ok(src[0].bytes_total >= Buffer.byteLength(text) - 1, "the whole text is indexed, nothing cut");
-    // Whole chunks only: the selected chunks, joined by one "\n", make up the body byte for byte.
-    const body = replaced.slice(0, replaced.lastIndexOf("\n" + CCP + "ctx_search(") < 0 ? replaced.length : replaced.lastIndexOf("\n" + CCP + "ctx_search("));
-    const whole = chunkText(text, "text", REPLACE_CHUNK_BYTES).filter((c) => body.includes(c.text));
-    assert.ok(whole.length > 0);
-    const joined = whole.reduce((n, c) => n + Buffer.byteLength(c.text), 0) + whole.length - 1;
-    assert.equal(joined, Buffer.byteLength(body), "the body is whole chunks, nothing cut");
-  });
-
-  test("case C, bytes > SYNC_INDEX_MAX_BYTES: in-memory selection, detached index (F1)", async () => {
-    const text = bigText(SYNC_INDEX_MAX_BYTES * 2);
-    const p = subagentPost(text, "reader");
-    const out = parsed(await handleHook("claude-code", p, env));
-    assert.ok(Buffer.byteLength(out.updatedToolOutput) <= REPLACE_RETURN_BYTES + 512);
-    assert.ok(out.updatedToolOutput.includes("needle target"));
-    const src = await waitRows("SELECT label FROM sources WHERE session_id = ?", [p.session_id], 1);
-    assert.equal(src.length, 1);
-  });
+  for (const bytes of [40000, SYNC_INDEX_MAX_BYTES * 2]) {
+    test(`child with usable shell indexes ${bytes} bytes and keeps whole selected chunks`, async () => {
+      writeFileSync(join(repo, ".claude", "agents", "reader-shell.md"), "---\nname: reader-shell\ntools: Read, Bash\n---\n");
+      const text = bigText(bytes);
+      const p = subagentPost(text, "reader-shell");
+      const bundle = join(root, "recovery-bundle");
+      mkdirSync(bundle, { recursive: true });
+      writeFileSync(join(bundle, "search.mjs"), "// shipped sidecar shape fixture\n");
+      const out = parsed(await handleHook("claude-code", p, { ...env, CLAUDE_PLUGIN_ROOT: bundle }));
+      const replaced = out.updatedToolOutput;
+      const at = replaced.lastIndexOf("\nWithout MCP, run: ");
+      assert.ok(at >= 0, "a usable native recovery command follows the selected body");
+      const body = replaced.slice(0, at);
+      assert.ok(Buffer.byteLength(body) <= REPLACE_RETURN_BYTES);
+      assert.ok(body.includes("needle target"));
+      const whole = chunkText(text, "text", REPLACE_CHUNK_BYTES).filter((c) => body.includes(c.text));
+      assert.ok(whole.length > 0);
+      assert.equal(whole.reduce((n, c) => n + Buffer.byteLength(c.text), 0) + whole.length - 1, Buffer.byteLength(body));
+      const sources = await waitRows("SELECT id, label, bytes_total FROM sources WHERE session_id = ?", [p.session_id], 1);
+      assert.equal(sources.length, 1);
+      assert.ok(sources[0].label.startsWith("subagent:Read:/big.log#sub-1:"));
+      assert.ok(sources[0].bytes_total >= Buffer.byteLength(text) - 1, "the complete original output remains stored");
+      const chunks = await waitRows("SELECT ord FROM chunks WHERE source_id = ?", [sources[0].id], 1);
+      assert.ok(chunks.length > 0, "the detached path completes under the same reserved source");
+    });
+  }
 
   test("case B PreToolUse deny: reason names run.mjs next to the hook bundle (D-M3-arch-3)", async () => {
     const cmd = "curl https://example.com/data";

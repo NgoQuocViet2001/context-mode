@@ -19,7 +19,7 @@ import type {
 import { getAdapter, hasRecall, hasReplace } from "../../adapters/table.ts";
 import { decide } from "../policy/decide.ts";
 import { isOwnFile } from "../policy/own-file.ts";
-import { isSubagentCall, pickSubagentCase, toolSetForAgentType } from "../policy/subagent.ts";
+import { declaredToolSetForAgentType, isSubagentCall, pickSubagentCase, toolSetForAgentType } from "../policy/subagent.ts";
 import { readUserDeny } from "../policy/user-deny.ts";
 import { resolveProject } from "../project/resolve.ts";
 import { claudeDirOf, homeDirOf } from "../project/config-dir.ts";
@@ -37,6 +37,7 @@ import { shapeDigest } from "../index/shape.ts";
 import { indexText } from "../index/text.ts";
 import { appendDetached } from "./detached.ts";
 import { askedWords } from "./handle-query.ts";
+import { localSearchCommand } from "./search-recovery.ts";
 import { answerDecisions, askOptionLabels, optionEchoDecision, type DecisionPart } from "./decision.ts";
 import { shouldHint } from "./throttle.ts";
 import { CtxError } from "../contracts/errors.ts";
@@ -417,7 +418,7 @@ function pathOf(input: Record<string, unknown>): string | null {
 
 async function postToolUse(ev: CanonicalHookEvent, row: AdapterRow, project: ProjectContext, env: NodeJS.ProcessEnv, settle: Settle): Promise<Decision> {
   const tool = ev.tool;
-  if (tool === undefined || tool.canonicalName.startsWith(OWN_TOOL_PREFIX)) return ALLOW; // step 1 (ADR-0009 §0)
+  if (tool === undefined || tool.canonicalName.startsWith(OWN_TOOL_PREFIX)) return ALLOW;
   const result = ev.result ?? { isError: false, bytes: 0 };
   const text = wholeOutput(result, ev.sessionId, env);
   if (result.persistedPath !== undefined) result.bytes = Buffer.byteLength(text);
@@ -466,14 +467,30 @@ async function postReplace(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
   // ADR-0001: one path per row, no runtime fallback. A row with no replace channel gets no replace decision on
   // any path, the subagent one too (D-STATS-RET-2): its encoder drops it, so the model gets the whole output.
   if (!hasReplace(row, ev)) return ALLOW;
+  let localRecovery = false;
+  let mcpRecovery = true;
+  let recoveryShell = tool.name;
+  if (ev.agent === "claude-code") {
+    const tools = declaredToolSetForAgentType(ev, { projectDir: project.worktree, env });
+    const hasSearch = tools?.includes(row.toolNamePrefix + "ctx_search") === true;
+    const hasShell = tools?.some((t) => row.nativeTools.shell.includes(t));
+    if (tools?.includes("PowerShell") && !tools.includes("Bash")) recoveryShell = "PowerShell";
+    if (isSubagentCall(ev)) {
+      if (hasSearch || tools === null || !hasShell) return ALLOW;
+      localRecovery = hasShell === true && !hasSearch;
+      mcpRecovery = hasSearch;
+    } else {
+      // A normal main session has its native shell. A named read-only main does not.
+      if ((ev.agentType ?? "") !== "" && (tools === null || !hasShell)) return ALLOW;
+      localRecovery = false;
+    }
+  }
   let label: string;
   if (isSubagentCall(ev)) {
-    const subCase = pickSubagentCase(ev, toolSetForAgentType(ev, { projectDir: project.worktree, env }));
-    if (subCase === "A") return ALLOW;
-    label = SUBAGENT_SOURCE_PREFIX + tool.canonicalName + ":" + String(ev.turn ?? 0);
-  } else {
-    label = mainLabel(tool, ev);
-  }
+    if (ev.agent !== "claude-code" && pickSubagentCase(ev, toolSetForAgentType(ev, { projectDir: project.worktree, env })) === "A") return ALLOW;
+    label = ev.agent === "claude-code" ? SUBAGENT_SOURCE_PREFIX + mainLabel(tool, ev)
+      : SUBAGENT_SOURCE_PREFIX + tool.canonicalName + ":" + String(ev.turn ?? 0);
+  } else label = mainLabel(tool, ev);
   // D-M7-RR-3: no description -> the command text, file path, pattern or URL, never an empty query.
   const intent = [tool.input.description, tool.input.command, tool.input.file_path, tool.input.pattern, tool.input.url]
     .map(str).find((v) => v.trim() !== "") ?? "";
@@ -503,8 +520,19 @@ async function postReplace(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
   // replace is the size bound of D-CR3-HANDLE-1 (REPLACE_RETURN_BYTES of selection + the more line with the full
   // label); the selection gets that budget minus the handle line, so a replace never grows.
   // D-HA-GEMINI-HINT-1: a second query of the prompt words the output holds, so the call returns the asked line.
-  const handleLine = REPLACE_HANDLE_LINE(intent, handle, result.bytes, row.toolNamePrefix, askedWords(intent, prompt, text));
-  const budget = replaceBudget(handleLine, moreLine(intent, label));
+  const mcpLine = REPLACE_HANDLE_LINE(intent, handle, result.bytes, row.toolNamePrefix, askedWords(intent, prompt, text));
+  const recovery = localRecovery ? localSearchCommand(project, sourceId, env, recoveryShell) : null;
+  if (localRecovery && recovery === null) return ALLOW;
+  if (recovery !== null) {
+    const recoveryEvent: CanonicalHookEvent = { ...ev, event: "PreToolUse", result: undefined,
+      tool: { name: recoveryShell === "PowerShell" ? "PowerShell" : "Bash", canonicalName: "Bash", input: { command: recovery } } };
+    if (decide(recoveryEvent, row, readUserDeny(project.worktree, ev.agent), project).kind === "deny") return ALLOW;
+  }
+  const fallbackLine = recovery === null ? "" : "Without MCP, run: " + recovery;
+  const handleLine = [fallbackLine, mcpRecovery ? mcpLine : ""].filter(Boolean).join("\n");
+  if (Buffer.byteLength(handleLine) >= result.bytes) return ALLOW;
+  const normalBudget = replaceBudget(mcpRecovery ? mcpLine : "", moreLine(intent, label));
+  const budget = localRecovery ? Math.min(REPLACE_RETURN_BYTES, normalBudget) : normalBudget;
   const digest = shapeDigest(text, rankQuery ?? intent, SHAPE_RETURN_BYTES); // D-M2-JSON-1
   if (digest !== null) return { kind: "replace", output: replaceOutput(digest, handleLine) };
   const selected = selectChunksInMemory(chunks, intent, budget, label, rankQuery);
@@ -567,11 +595,16 @@ async function lastPrompt(project: ProjectContext, sessionId: string): Promise<s
 
 // D-M7-RR-1: "<tool>:" + the first line of the command (or the tool name), at most SOURCE_LABEL_MAX_CHARS,
 // + "#" + call id when the host gives one, so two runs of one command stay two sources.
-function mainLabel(tool: ToolCall, ev: CanonicalHookEvent): string {
-  const cmd = str(tool.input.command) ?? str(tool.input.file_path) ?? "";
+export function mainLabel(tool: ToolCall, ev: CanonicalHookEvent): string {
+  const cmd = [tool.input.command, ...READ_PATH_KEYS.map((k) => tool.input[k]), tool.input.pattern, tool.input.url]
+    .map(str).find((v) => v.trim() !== "") ?? "";
   const nl = cmd.indexOf("\n");
   const head = (tool.canonicalName + ":" + (nl < 0 ? cmd : cmd.slice(0, nl))).slice(0, SOURCE_LABEL_MAX_CHARS);
-  return head + "#" + (tool.callId ?? String(ev.turn ?? 0));
+  // A turn counter is not a call identity: concurrent children commonly report turn 0.
+  // Preserve host call IDs, and give events without one a fresh label instead of merging filters.
+  const id = tool.callId || (ev.agent === "claude-code" && isSubagentCall(ev)
+    ? (process.getBuiltinModule("node:crypto") as typeof import("node:crypto")).randomUUID() : String(ev.turn ?? 0));
+  return head + "#" + (ev.agent === "claude-code" && isSubagentCall(ev) ? ev.agentId + ":" : "") + id;
 }
 
 // F1: above SYNC_INDEX_MAX_BYTES the FTS5 chunk write never blocks the decision; same rules as appendDetached.
