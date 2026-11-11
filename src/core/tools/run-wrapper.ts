@@ -6,7 +6,8 @@
 // (shell), indexes the full output, prints only the chunks that match the description, and exits with
 // the command's own exit code. search.mjs reads more of an indexed output by source id.
 import { randomUUID } from "node:crypto";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
+import { lstatSync, realpathSync } from "node:fs";
 import { getAdapter } from "../../adapters/table.ts";
 import {
   EXEC_TIMEOUT_MS,
@@ -25,6 +26,7 @@ import {
   SEARCH_USAGE_LINE,
   SEARCH_WRAPPER_FILE,
   SOURCE_LABEL_MAX_CHARS,
+  DB_FILE_NAME, PROJECTS_DIR_NAME,
   USER_DENY_REASON_PREFIX,
 } from "../contracts/constants.ts";
 import { CtxError } from "../contracts/errors.ts";
@@ -152,21 +154,40 @@ export async function runWrapperMain(argv: string[], env: NodeJS.ProcessEnv): Pr
 }
 
 /** D-M3-X1-2: search.mjs <source-id> "<terms>": the chunks of one indexed run.mjs output that match the terms. */
-export async function searchWrapperMain(argv: string[], _env: NodeJS.ProcessEnv): Promise<never> {
+export async function searchWrapperMain(argv: string[], env: NodeJS.ProcessEnv): Promise<never> {
   const id = Number(argv[2] ?? "");
   const terms = argv[3] ?? "";
   if (argv[2] === undefined || argv[2] === "" || !Number.isSafeInteger(id) || id < 0) {
     return exit(RUN_FAIL_EXIT, "", SEARCH_USAGE_LINE + "\n");
   }
   try {
-    const db = await openDb(projectOf(argv, process.cwd()));
+    // Leave room for native shell newline conversion. Exact generated recovery calls are exempt
+    // from re-replacement under OUTPUT_CAP, even when a user configures a very low trigger.
+    const outputCap = argv[4] === "--context" ? Math.floor(OUTPUT_CAP / 2) - 1 : OUTPUT_CAP;
+    let project: ProjectContext;
+    if (argv[4] === "--context") {
+      let binding: unknown;
+      try { binding = JSON.parse(Buffer.from(argv[5] ?? "", "base64url").toString("utf8")); } catch { binding = null; }
+      const b = binding as { worktree?: unknown; dataDir?: unknown } | null;
+      if (b === null || typeof b.worktree !== "string" || !isAbsolute(b.worktree)
+        || typeof b.dataDir !== "string" || !isAbsolute(b.dataDir)) return exit(RUN_FAIL_EXIT, "", SEARCH_USAGE_LINE + "\n");
+      const resolved = resolveProject(RUN_WRAPPER_AGENT, { env: { ...env, CLAUDE_PROJECT_DIR: b.worktree }, argv, cwd: b.worktree });
+      // resolveProject's normal lazy store root follows process.env. A recovery command instead
+      // names the exact root that indexed this source; never use the caller's changed environment.
+      const projectDir = join(realpathSync.native(b.dataDir), PROJECTS_DIR_NAME, resolved.projectKey);
+      const dbPath = join(projectDir, DB_FILE_NAME);
+      if (!lstatSync(dbPath).isFile()) return exit(RUN_FAIL_EXIT, "", "context-mode: indexed output database is missing\n");
+      project = { projectKey: resolved.projectKey, worktree: resolved.worktree, containmentRoot: resolved.containmentRoot,
+        agent: resolved.agent, source: resolved.source, projectDir, dbPath };
+    } else project = projectOf(argv, process.cwd());
+    const db = await openDb(project);
     let text: string;
     try {
-      text = selectChunks(db, id, terms, OUTPUT_CAP).text;
+      text = selectChunks(db, id, terms, outputCap).text;
     } finally {
       closeDb(db);
     }
-    return exit(0, capBytes(text, OUTPUT_CAP).text + "\n", "");
+    return exit(0, capBytes(text, outputCap).text + "\n", "");
   } catch (err) {
     if (err instanceof CtxError) return exit(RUN_FAIL_EXIT, "", err.toLine() + "\n");
     throw err;

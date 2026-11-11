@@ -226,7 +226,7 @@ function bash(ev: CanonicalHookEvent, row: AdapterRow, input: Record<string, unk
   }
   // 5c size-guess denies: only where no post-run replace exists, or on a subagent call (ADR-0016).
   // On a replace row the main agent runs the command and PostToolUse replaces a large result (D-M7-RR-1).
-  if (!hasReplace(row) || isSubagentCall(ev)) {
+  if (!hasReplace(row, ev) || isSubagentCall(ev)) {
     for (const c of cmds) {
       const kind = denyKind(c);
       if (kind !== null) return deny(denyMessage(kind, cmd, row, str(input.description)));

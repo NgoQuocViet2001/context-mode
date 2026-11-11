@@ -502,3 +502,6 @@ describe("ADR-0016: vscode tool names", () => {
     }
   });
 });
+
+// #1342/#1343 restricted retrieval, synced definitions and source identity regressions.
+import "./_lib/claude-search-recovery.mjs";

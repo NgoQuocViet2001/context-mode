@@ -13,6 +13,8 @@ export interface CanonicalHookEvent {
   cwd: string;
   agentId?: string;        // subagent marker; presence = subagent (Q23)
   agentType?: string;      // selects tool-set row only
+  replaceSupported?: boolean; // OpenCode 2 execute.after can update event.result
+  unavailableTools?: string[]; // host-confirmed model-visible tool list excludes these alternatives
   source?: "startup" | "resume" | "clear" | "compact"; // SessionStart
   prompt?: string;         // UserPromptSubmit
   tool?: ToolCall;         // Pre/PostToolUse

@@ -2,7 +2,7 @@
 // In-process: no spawn, no MCP hop (impl/12 §1). Every hook builds the raw call-site object the
 // opencode adapter decodes (D-M5-A1-1) and calls handleHook; this file never opens context.db.
 import {
-  INTERNAL_ERROR_LINE, OC_ANY_RESOURCE, OC_LEGACY_SHELL_ACTION, OC_READ_ACTION, OC_SHELL_ACTION, OC_WEBFETCH_ACTION, PLUGIN_ID,
+  INTERNAL_ERROR_LINE, OC_ANY_RESOURCE, OC_LEGACY_SHELL_ACTION, OC_READ_ACTION, OC_SHELL_ACTION, OC_WEBFETCH_ACTION, PLUGIN_ID, TOOL_ORDER,
 } from "../core/contracts/constants.ts";
 import { CtxError } from "../core/contracts/errors.ts";
 import type { HookOutput, HostPermission, ProjectContext, ToolContext, ToolReply } from "../core/contracts/types.ts";
@@ -21,6 +21,7 @@ const AGENT = "opencode";
 /** OpenCode's `app` handle at plugin load: `directory` is the spawn cwd (impl/12 §4.3 step 1). */
 export interface OpenCodeApp {
   directory?: string;
+  replaceSupported?: boolean;
   tool(name: string, def: OpenCodeToolDef): void;
   /** D-1331-OC-PERM-1: the host permission check; it rejects on deny. Absent = the 1.19 `toolCtx.ask` path. */
   assert?: (req: PermissionRequest, toolCtx: OpenCodeToolCtx) => Promise<void>;
@@ -102,7 +103,7 @@ export interface OpenCodeToolDef {
   execute(args: unknown, toolCtx: OpenCodeToolCtx): Promise<string>;
 }
 
-interface ToolInput { tool?: string; sessionID?: string; callID?: string; args?: unknown }
+interface ToolInput { tool?: string; sessionID?: string; callID?: string; args?: unknown; agent?: string; unavailableTools?: string[] }
 interface TextPart { type?: string; text?: string }
 interface BusEvent { type?: string; properties?: { part?: { type?: string; sessionID?: string } } }
 
@@ -198,19 +199,22 @@ export async function setupLegacy(app: OpenCodeApp) {
       await payloadFor(sessionId);
       const out = await call({
         type: "execute.before", sessionID: sessionId, tool: input.tool, callID: input.callID, args: output.args,
+        agentType: input.agent, unavailableTools: input.unavailableTools, replaceSupported: app.replaceSupported === true,
         turn: turnOf(sessionId),
       });
       if (out.exitCode === 2) throw new Error(out.stdout);
     },
 
     // §4.5. OpenCode's encode has no replace field (impl/10 §11), so output.output is never changed here.
-    "tool.execute.after": async (input: ToolInput, output: { output?: unknown; isError?: boolean }) => {
+    "tool.execute.after": async (input: ToolInput, output: { output?: unknown; isError?: boolean; keep?: boolean }) => {
       const sessionId = input.sessionID ?? "";
       await payloadFor(sessionId);
-      await call({
+      const out = await call({
         type: "execute.after", sessionID: sessionId, tool: input.tool, callID: input.callID, args: input.args,
         output: output.output, isError: output.isError, turn: turnOf(sessionId),
+        replaceSupported: app.replaceSupported === true, keep: output.keep,
       });
+      if (app.replaceSupported === true && out.stdout !== "") output.output = out.stdout;
     },
 
     // §4.6: one system entry per session, the same bytes on every request (#1085, Q12). A second
@@ -245,10 +249,10 @@ export async function setupLegacy(app: OpenCodeApp) {
 // ("session.step.ended"), plugin tools -> ctx.tool.transform(editor.add). setup returns a dispose function.
 
 interface Oc2Content { type?: string; text?: string }
-interface Oc2BeforeInput { tool?: string; sessionID?: string; id?: string; input?: unknown }
+interface Oc2BeforeInput { tool?: string; sessionID?: string; id?: string; input?: unknown; agent?: string }
 interface Oc2AfterInput extends Oc2BeforeInput {
   status?: string;
-  result?: { content?: string | Oc2Content[]; output?: unknown };
+  result?: { content?: string | Oc2Content[]; output?: unknown; [key: string]: unknown };
   error?: { message?: string };
 }
 interface Oc2Part { type?: string; text?: string }
@@ -289,8 +293,11 @@ function oc2Text(content: string | Oc2Content[] | undefined): string {
 export async function setup(ctx: OpenCode2Context): Promise<() => void> {
   const tools = new Map<string, Oc2Tool>();
   const assert = ctx.permission?.assert;
+  const visibleTools = new Map<string, Set<string>>();
+  const callerKey = (sessionID = "", agent = "") => JSON.stringify([sessionID, agent]);
   const hooks = await setupLegacy({
     directory: ctx.location.directory,
+    replaceSupported: true,
     // D-1331-OC-PERM-1: ctx.permission.assert is the 2.x plugin check (anomalyco/opencode#50652); "missing" feeds D10.
     permission: typeof assert === "function" ? "wired" : "missing",
     assert: async (req, t) => {
@@ -316,17 +323,30 @@ export async function setup(ctx: OpenCode2Context): Promise<() => void> {
   await ctx.tool.transform((editor) => { for (const t of tools.values()) editor.add(t); });
 
   await ctx.tool.hook("execute.before", async (i: Oc2BeforeInput) => {
-    await hooks["tool.execute.before"]({ tool: i.tool, sessionID: i.sessionID, callID: i.id }, { args: i.input });
+    const visible = visibleTools.get(callerKey(i.sessionID, i.agent));
+    const unavailableTools = visible === undefined ? undefined : TOOL_ORDER.filter((name) => !visible.has(name));
+    await hooks["tool.execute.before"]({ tool: i.tool, sessionID: i.sessionID, callID: i.id, agent: i.agent, unavailableTools }, { args: i.input });
   });
   await ctx.tool.hook("execute.after", async (i: Oc2AfterInput) => {
     const failed = i.status === "error";
     const output = failed ? i.error?.message ?? "" : oc2Text(i.result?.content);
-    await hooks["tool.execute.after"]({ tool: i.tool, sessionID: i.sessionID, callID: i.id, args: i.input }, { output, isError: failed });
+    const visible = visibleTools.get(callerKey(i.sessionID, i.agent));
+    const reply = { output, isError: failed, keep: failed || (visible !== undefined && !visible.has("ctx_search")) || (Array.isArray(i.result?.content) && i.result.content.some((part) => part.type !== "text")) };
+    await hooks["tool.execute.after"]({ tool: i.tool, sessionID: i.sessionID, callID: i.id, args: i.input }, reply);
+    if (!failed && i.result !== undefined && reply.output !== output) {
+      i.result = { ...i.result, content: [{ type: "text", text: reply.output }] };
+    }
   });
   await ctx.session.hook("prompt", async (p: { sessionID?: string; prompt?: { text?: string } }) => {
     await hooks["chat.message"]({ sessionID: p.sessionID }, { parts: [{ type: "text", text: p.prompt?.text ?? "" }] });
   });
-  await ctx.session.hook("context", async (c: { sessionID?: string; system: Oc2Part[] }) => {
+  await ctx.session.hook("context", async (c: { sessionID?: string; agent?: string; tools?: Record<string, unknown>; system: Oc2Part[] }) => {
+    if (c.tools !== undefined) {
+      const key = callerKey(c.sessionID, c.agent);
+      visibleTools.delete(key);
+      visibleTools.set(key, new Set(TOOL_ORDER.filter((name) => Object.hasOwn(c.tools!, name))));
+      if (visibleTools.size > 128) visibleTools.delete(visibleTools.keys().next().value!);
+    }
     const system: string[] = [];
     await hooks["experimental.chat.system.transform"]({ sessionID: c.sessionID }, { system });
     for (const text of system) if (!c.system.some((p) => p.text === text)) c.system.push({ type: "text", text });
@@ -342,7 +362,7 @@ export async function setup(ctx: OpenCode2Context): Promise<() => void> {
       await hooks.event({ event: { type: "message.part.updated", properties: { part: { type: "step-finish", sessionID: e.data?.sessionID } } } });
     }
   })().catch(() => { /* a hook never errors (ADR-0001); an ended stream is the dispose path */ });
-  return () => stop.abort();
+  return () => { stop.abort(); visibleTools.clear(); };
 }
 
 /** ADR-0020, D-HA-6: the OpenCode 1.19.4 loader takes `export default { id, server }`; `server(input)` returns the

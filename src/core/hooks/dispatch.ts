@@ -7,7 +7,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { AGENT_IDS, type AgentId } from "../contracts/agents.ts";
 import {
   COMPACTED_META_PREFIX, COMPACT_POINTER_LINE, COMPACT_STATE_KEY, DECISION_OPTION_KEY, DECISION_SOURCE, DECISION_TOOL, EDIT_PATH_KEYS, EDIT_TOOLS, EXIT_CODE_LINE_PREFIX,
-  OWN_TOOL_PREFIX, prefixToolNames, REPLACE_CHUNK_BYTES, REPLACE_HANDLE_LINE, REPLACE_RETURN_BYTES, REPLACE_TRIGGER_BYTES, RANGE_READ_TOOLS, READ_PATH_KEYS, READ_RANGE_KEYS, SHAPE_RETURN_BYTES, PARSE_ERROR_DENY_LINE, PENDING_COMPACT_FLAG, PENDING_COMPACT_KEY,
+  OWN_TOOL_PREFIX, OUTPUT_CAP, prefixToolNames, REPLACE_CHUNK_BYTES, REPLACE_HANDLE_LINE, REPLACE_RETURN_BYTES, REPLACE_TRIGGER_BYTES, RANGE_READ_TOOLS, READ_PATH_KEYS, READ_RANGE_KEYS, SHAPE_RETURN_BYTES, PARSE_ERROR_DENY_LINE, PENDING_COMPACT_FLAG, PENDING_COMPACT_KEY,
   PENDING_COMPACT_META_PREFIX, POLICY_UNREADABLE_LINE, RECALL_KEY, RECALL_MAX_ROWS, RECALL_SEEN_META_PREFIX, RECALL_UNIT_CANDIDATES, RECALL_UNITS_SEEN_META_PREFIX, RESUME_HINT, RESUME_HINT_KEY, RUN_WRAPPER_FILE,
   RUN_WRAPPER_NODE, SHELL_TOOL, SOURCE_LABEL_MAX_CHARS, SUBAGENT_SOURCE_PREFIX, SYNC_INDEX_MAX_BYTES, TOOL_PREFIX_SLOT,
   USER_DENY_REASON_PREFIX,
@@ -19,7 +19,7 @@ import type {
 import { getAdapter, hasRecall, hasReplace } from "../../adapters/table.ts";
 import { decide } from "../policy/decide.ts";
 import { isOwnFile } from "../policy/own-file.ts";
-import { isSubagentCall, pickSubagentCase, toolSetForAgentType } from "../policy/subagent.ts";
+import { declaredToolSetForAgentType, isSubagentCall, pickSubagentCase, toolSetForAgentType } from "../policy/subagent.ts";
 import { readUserDeny } from "../policy/user-deny.ts";
 import { resolveProject } from "../project/resolve.ts";
 import { claudeDirOf, homeDirOf } from "../project/config-dir.ts";
@@ -37,6 +37,7 @@ import { shapeDigest } from "../index/shape.ts";
 import { indexText } from "../index/text.ts";
 import { appendDetached } from "./detached.ts";
 import { askedWords } from "./handle-query.ts";
+import { isLocalSearchRecovery, localSearchCommand } from "./search-recovery.ts";
 import { answerDecisions, askOptionLabels, optionEchoDecision, type DecisionPart } from "./decision.ts";
 import { shouldHint } from "./throttle.ts";
 import { CtxError } from "../contracts/errors.ts";
@@ -326,6 +327,14 @@ async function preToolUse(ev: CanonicalHookEvent, row: AdapterRow, project: Proj
   const userDeny = readUserDeny(project.worktree, ev.agent);
   const decision0 = decide(ev, row, userDeny, project);
   let decision = decision0;
+  // OpenCode 2 supplies the model-visible tool inventory for this session/agent. A routing
+  // alternative that is absent must not become an impossible retry loop. User denies still win.
+  if (ev.agent === "opencode" && decision0.kind === "deny" && !isUserPolicyDeny(decision0.reason, row)
+    && ev.unavailableTools?.some((name) => decision0.reason.includes(name))) {
+    return ev.tool?.canonicalName === "Read"
+      ? { kind: "deny", reason: "context-mode: read a bounded window of this file using offset and limit." }
+      : ALLOW;
+  }
   if (decision0.kind === "deny" && isSubagentCall(ev) && !isUserPolicyDeny(decision0.reason, row)) {
     // Case A keeps decision0 (D-M3-H2-4); case B names the run.mjs wrapper for a shell call.
     // D-SUB-NOCTX-1 (#1311): a deny names only tools the caller has. A caller without ctx_* tools runs the call:
@@ -334,7 +343,7 @@ async function preToolUse(ev: CanonicalHookEvent, row: AdapterRow, project: Proj
     const set = toolSetForAgentType(ev, { projectDir: project.worktree, env });
     const subCase = pickSubagentCase(ev, set);
     const tool = ev.tool;
-    const runs = set !== null || ((ev.agentType ?? "") !== "" && hasReplace(row));
+    const runs = set !== null || ((ev.agentType ?? "") !== "" && hasReplace(row, ev));
     if (subCase === "B" && tool !== undefined && isShell(tool, row)) decision = caseB(ev, row, decision0, userDeny);
     else if (subCase !== "A" && runs) decision = ALLOW;
   }
@@ -409,7 +418,7 @@ function pathOf(input: Record<string, unknown>): string | null {
 
 async function postToolUse(ev: CanonicalHookEvent, row: AdapterRow, project: ProjectContext, env: NodeJS.ProcessEnv, settle: Settle): Promise<Decision> {
   const tool = ev.tool;
-  if (tool === undefined || tool.canonicalName.startsWith(OWN_TOOL_PREFIX)) return ALLOW; // step 1 (ADR-0009 §0)
+  if (tool === undefined || tool.canonicalName.startsWith(OWN_TOOL_PREFIX)) return ALLOW;
   const result = ev.result ?? { isError: false, bytes: 0 };
   const text = wholeOutput(result, ev.sessionId, env);
   if (result.persistedPath !== undefined) result.bytes = Buffer.byteLength(text);
@@ -452,20 +461,41 @@ async function postReplace(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
   // step 5: replace, DECISIONS-r9 F1 split. Subagent case B/C (ADR-0016), and the main agent on a row
   // with a replace channel ("run, then replace", D-M7-RR-1, DECISIONS-r10 (1)).
   if (result.bytes <= REPLACE_TRIGGER_BYTES) return ALLOW; // D-M7-SV-1
+  // A bounded reply from our exact generated search command is already a recovery result.
+  // This is PostToolUse formatting only: the normal user-deny/permission path still runs first.
+  if (ev.agent === "claude-code" && isShell(tool, row) && !result.isError && result.bytes <= OUTPUT_CAP
+    && isLocalSearchRecovery(str(tool.input.command), project, env, tool.name)) return ALLOW;
   if (boundedRead(tool)) return ALLOW; // D-R41-READ-OFFSET-1 (#1314): the user asked for these lines
   if (ownRead(ev, tool, env)) return ALLOW; // D-R48-OWN-FILE-1 (#1326): a skill or rule file reaches the model whole
   if (result.keep === true) return ALLOW; // D-M2-MCP-1: an MCP result with a non-text block stays as the host made it
   // ADR-0001: one path per row, no runtime fallback. A row with no replace channel gets no replace decision on
   // any path, the subagent one too (D-STATS-RET-2): its encoder drops it, so the model gets the whole output.
-  if (!hasReplace(row)) return ALLOW;
+  if (!hasReplace(row, ev)) return ALLOW;
+  let localRecovery = false;
+  let mcpRecovery = true;
+  let recoveryShell = tool.name;
+  if (ev.agent === "claude-code") {
+    const tools = declaredToolSetForAgentType(ev, { projectDir: project.worktree, env });
+    const hasSearch = tools?.includes(row.toolNamePrefix + "ctx_search") === true;
+    const hasShell = tools?.some((t) => row.nativeTools.shell.includes(t));
+    if (tools?.includes("Bash")) recoveryShell = "Bash";
+    else if (tools?.includes("PowerShell")) recoveryShell = "PowerShell";
+    if (isSubagentCall(ev)) {
+      if (hasSearch || tools === null || !hasShell) return ALLOW;
+      localRecovery = hasShell === true && !hasSearch;
+      mcpRecovery = hasSearch;
+    } else {
+      // A normal main session has its native shell. A named read-only main does not.
+      if ((ev.agentType ?? "") !== "" && (tools === null || !hasShell)) return ALLOW;
+      localRecovery = false;
+    }
+  }
   let label: string;
   if (isSubagentCall(ev)) {
-    const subCase = pickSubagentCase(ev, toolSetForAgentType(ev, { projectDir: project.worktree, env }));
-    if (subCase === "A") return ALLOW;
-    label = SUBAGENT_SOURCE_PREFIX + tool.canonicalName + ":" + String(ev.turn ?? 0);
-  } else {
-    label = mainLabel(tool, ev);
-  }
+    if (ev.agent !== "claude-code" && pickSubagentCase(ev, toolSetForAgentType(ev, { projectDir: project.worktree, env })) === "A") return ALLOW;
+    label = ev.agent === "claude-code" ? SUBAGENT_SOURCE_PREFIX + mainLabel(tool, ev)
+      : SUBAGENT_SOURCE_PREFIX + tool.canonicalName + ":" + String(ev.turn ?? 0);
+  } else label = mainLabel(tool, ev);
   // D-M7-RR-3: no description -> the command text, file path, pattern or URL, never an empty query.
   const intent = [tool.input.description, tool.input.command, tool.input.file_path, tool.input.pattern, tool.input.url]
     .map(str).find((v) => v.trim() !== "") ?? "";
@@ -495,8 +525,19 @@ async function postReplace(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
   // replace is the size bound of D-CR3-HANDLE-1 (REPLACE_RETURN_BYTES of selection + the more line with the full
   // label); the selection gets that budget minus the handle line, so a replace never grows.
   // D-HA-GEMINI-HINT-1: a second query of the prompt words the output holds, so the call returns the asked line.
-  const handleLine = REPLACE_HANDLE_LINE(intent, handle, result.bytes, row.toolNamePrefix, askedWords(intent, prompt, text));
-  const budget = replaceBudget(handleLine, moreLine(intent, label));
+  const mcpLine = REPLACE_HANDLE_LINE(intent, handle, result.bytes, row.toolNamePrefix, askedWords(intent, prompt, text));
+  const recovery = localRecovery ? localSearchCommand(project, sourceId, env, recoveryShell) : null;
+  if (localRecovery && recovery === null) return ALLOW;
+  if (recovery !== null) {
+    const recoveryEvent: CanonicalHookEvent = { ...ev, event: "PreToolUse", result: undefined,
+      tool: { name: recoveryShell === "PowerShell" ? "PowerShell" : "Bash", canonicalName: "Bash", input: { command: recovery } } };
+    if (decide(recoveryEvent, row, readUserDeny(project.worktree, ev.agent), project).kind === "deny") return ALLOW;
+  }
+  const fallbackLine = recovery === null ? "" : "Without MCP, run: " + recovery;
+  const handleLine = [fallbackLine, mcpRecovery ? mcpLine : ""].filter(Boolean).join("\n");
+  if (Buffer.byteLength(handleLine) >= result.bytes) return ALLOW;
+  const normalBudget = replaceBudget(mcpRecovery ? mcpLine : "", moreLine(intent, label));
+  const budget = localRecovery ? Math.min(REPLACE_RETURN_BYTES, normalBudget) : normalBudget;
   const digest = shapeDigest(text, rankQuery ?? intent, SHAPE_RETURN_BYTES); // D-M2-JSON-1
   if (digest !== null) return { kind: "replace", output: replaceOutput(digest, handleLine) };
   const selected = selectChunksInMemory(chunks, intent, budget, label, rankQuery);
@@ -559,11 +600,16 @@ async function lastPrompt(project: ProjectContext, sessionId: string): Promise<s
 
 // D-M7-RR-1: "<tool>:" + the first line of the command (or the tool name), at most SOURCE_LABEL_MAX_CHARS,
 // + "#" + call id when the host gives one, so two runs of one command stay two sources.
-function mainLabel(tool: ToolCall, ev: CanonicalHookEvent): string {
-  const cmd = str(tool.input.command) ?? str(tool.input.file_path) ?? "";
+export function mainLabel(tool: ToolCall, ev: CanonicalHookEvent): string {
+  const cmd = [tool.input.command, ...READ_PATH_KEYS.map((k) => tool.input[k]), tool.input.pattern, tool.input.url]
+    .map(str).find((v) => v.trim() !== "") ?? "";
   const nl = cmd.indexOf("\n");
   const head = (tool.canonicalName + ":" + (nl < 0 ? cmd : cmd.slice(0, nl))).slice(0, SOURCE_LABEL_MAX_CHARS);
-  return head + "#" + (tool.callId ?? String(ev.turn ?? 0));
+  // A turn counter is not a call identity: concurrent children commonly report turn 0.
+  // Preserve host call IDs, and give events without one a fresh label instead of merging filters.
+  const id = tool.callId || (ev.agent === "claude-code" && isSubagentCall(ev)
+    ? (process.getBuiltinModule("node:crypto") as typeof import("node:crypto")).randomUUID() : String(ev.turn ?? 0));
+  return head + "#" + (ev.agent === "claude-code" && isSubagentCall(ev) ? ev.agentId + ":" : "") + id;
 }
 
 // F1: above SYNC_INDEX_MAX_BYTES the FTS5 chunk write never blocks the decision; same rules as appendDetached.

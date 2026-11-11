@@ -180,6 +180,7 @@ export const REQUIRE_SECURITY_ENV = "CONTEXT_MODE_REQUIRE_SECURITY"; // v1 issue
 export const HOST_CONFIG_DIR_NAME = ".claude"; // project and user agents: <root>/.claude/agents/<type>.md
 export const AGENTS_DIR_NAME = "agents"; // also the plugin's own agents/ dir under its installPath
 export const AGENT_FILE_EXT = ".md";
+export const MAX_SYNCED_PLUGIN_DIRS = 256; // Bound directory lookups while decoding one Claude subagent hook.
 export const HOST_PLUGINS_DIR_NAME = "plugins"; // ~/.claude/plugins/installed_plugins.json
 export const INSTALLED_PLUGINS_FILE = "installed_plugins.json";
 export const PLUGIN_AGENT_SEPARATOR = ":"; // plugin agent type "<plugin>:<agent>"

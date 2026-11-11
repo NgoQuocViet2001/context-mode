@@ -381,7 +381,7 @@ import { DatabaseSync } from "node:sqlite";
     const content = "## Reference line for the python3 skill\n".repeat(150);
     for (const f of ["api.md", "log.jsonl"]) writeFileSync(path.join(target, "references", f), content);
     mkdirSync(path.join(root, ".claude", "skills"), { recursive: true });
-    symlinkSync(target, path.join(root, ".claude", "skills", "python3"));
+    symlinkSync(target, path.join(root, ".claude", "skills", "python3"), process.platform === "win32" ? "junction" : "dir");
     const env = { PATH: process.env.PATH, HOME: root, USERPROFILE: root, CLAUDE_PROJECT_DIR: repo };
     writeFileSync(path.join(root, "dotfiles", "skills", "outside.md"), content);
     const read = (name, filePath = path.join(root, ".claude", "skills", "python3", "references", name)) => {

@@ -11,6 +11,7 @@ import path from "node:path";
 import ts from "typescript";
 import { ADAPTERS } from "../src/adapters/table.ts";
 import { TOOL_ORDER } from "../src/core/contracts/constants.ts";
+import { geminiListsExtension } from "../src/setup/gemini-list.ts";
 import { OVERHEAD_P95_MS } from "../src/setup/engine.ts";
 import { hookCommandString, stableNodePath, SETUP_NODE } from "../src/setup/registry.ts";
 import { qwenHooksOff } from "../src/setup/qwen-gate.ts";
@@ -691,6 +692,25 @@ exit 0`);
     assert.match(doc.agents[0].reason, /mcp\.servers\.context-mode.*\/elsewhere\/opencode/);
   });
 
+  test("setup: OpenCode 2.1.4 retries debug config only when standalone is unsupported (#1349)", { skip: process.platform === "win32" && "fake agent binaries are sh scripts" }, async (t) => {
+    const s = sandbox(t);
+    const norm = path.join(s.root, "norm.mjs");
+    const log = path.join(s.root, "oc214.log");
+    writeFileSync(norm, `process.stdout.write(JSON.stringify([{info:{mcp:{servers:{"context-mode":{}}}}}]));`);
+    fakeBin(s.root, "opencode", `echo "$@" >> "${log}"
+case "$1 $2" in
+  "--version ") echo "opencode v2.1.4" ;;
+  "debug config")
+    if [ "$3" = "--standalone" ]; then echo "Unrecognized flag: --standalone in command opencode debug config" >&2; exit 1; fi
+    "${NODE}" "${norm}" ;;
+esac
+exit 0`);
+    const res = await runSetup({ home: s.home, pkgDir: s.pkgDir, env: s.env, agents: ["opencode"], runId: "r" });
+    assert.equal(res.agents[0].status, "PASS", JSON.stringify(res.agents[0], null, 2));
+    const calls = readFileSync(log, "utf8");
+    assert.ok(calls.includes("debug config --standalone") && calls.split("\n").includes("debug config"), calls);
+  });
+
   // D-SETUP-HOST-BROKEN-1 (#1308): "copilot mcp add ... exited 1: GitHub Copilot CLI: no platform package found.
   // Reinstall with `npm install -g @github/copilot`". The Copilot install itself is broken: setup reports SKIPPED with the
   // host's own fix line first, writes nothing, rolls nothing back, and the run does not fail on it.
@@ -1269,6 +1289,62 @@ exit 0`);
     assert.equal(installExitOk(3221226505, true, "linux"), false, "the code means nothing off Windows");
     assert.equal(installExitOk(null, true, "win32"), false);
   });
+
+  describe("Gemini extension identity: headers, not paths", () => {
+    const cases = [
+      ["current 0.68 header", "\u2713 context-mode (2.1.7)\n Path: D:/pkg\n", true],
+      ["old bare list", "context-mode\n", true],
+      ["ANSI header", "\u001b[32m\u2713 context-mode (2.1.7)\u001b[0m\n", true],
+      ["source path only", "\u2713 unrelated (1.0.0)\n Source: D:/context-mode-validation/extension\n", false],
+      ["diagnostic path only", "Warning: failed to inspect D:/context-mode/package\nNo extensions installed.\n", false],
+      ["similar name", "\u2713 context-mode-helper (1.0.0)\n", false],
+      ["malformed header", "context-mode (2.1.7\n", false],
+      ["unknown format", '{"name":"context-mode"}\n', false],
+      ["other extension MCP server", "\u2713 other (1.0.0)\n MCP servers:\n  context-mode\n", false],
+      ["official 0.65 extra entries", "\u2713 other (1.0.0)\n MCP servers:\n  context-mode\n\u2713 context-mode (2.0.0)\n Path: /h/extensions/context-mode\n Enabled (User): true\n Enabled (Workspace): true\n", true],
+    ];
+    for (const [name, listing, expected] of cases) test(name, () => {
+      assert.equal(geminiListsExtension(listing, "context-mode"), expected);
+    });
+
+    function fakeGemini(s, listing, state) {
+      const script = path.join(s.root, "gemini.cjs");
+      const log = path.join(s.root, "gemini-calls.jsonl");
+      writeFileSync(script, `const fs=require('node:fs');const args=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(args)+'\\n');
+if(args[0]==='extensions'&&args[1]==='list') {process.stdout.write(${JSON.stringify(listing)});if(fs.existsSync(${JSON.stringify(state)}))process.stdout.write('\\n\u2713 context-mode (2.1.7)\\n Enabled (User): true\\n Enabled (Workspace): true\\n');}
+else if(args[0]==='extensions'&&args[1]==='link')fs.writeFileSync(${JSON.stringify(state)},'installed');
+else if(args[0]==='extensions'&&args[1]==='uninstall')fs.rmSync(${JSON.stringify(state)},{force:true});else process.exitCode=2;`);
+      const shim = path.join(s.bin, process.platform === "win32" ? "gemini.cmd" : "gemini");
+      writeFileSync(shim, process.platform === "win32"
+        ? '@"' + process.execPath + '" "' + script + '" %*\r\n'
+        : '#!/bin/sh\n"' + process.execPath + '" "' + script + '" "$@"\n', { mode: 0o755 });
+      return { ...s.env, PATH: s.bin, SystemRoot: process.env.SystemRoot, ComSpec: process.env.ComSpec,
+        GEMINI_CLI_HOME: s.home, CONTEXT_MODE_DATA_DIR: path.join(s.root, "data") };
+    }
+
+    test("setup plans an install when only an unrelated source path contains context-mode", async (t) => {
+      const s=sandbox(t);const state=path.join(s.root,"installed");
+      const env=fakeGemini(s,"\u2713 unrelated (1.0.0)\n Source: D:/context-mode-validation/extension\n",state);
+      const res=await runSetup({home:s.home,pkgDir:s.pkgDir,env,agents:["gemini"],dryRun:true});
+      assert.equal(res.agents[0].status,"PASS",JSON.stringify(res));
+      assert.ok(res.agents[0].changes.some(c=>c.command?.includes("link")));
+      assert.equal(existsSync(state),false,"dry-run does not link anything");
+    });
+
+    test("setup/remove preserve unrelated entries and re-detect absence after uninstall", async (t) => {
+      const s=sandbox(t);generateManifests(s.pkgDir);const state=path.join(s.root,"installed");
+      const env=fakeGemini(s,"\u2713 unrelated (1.0.0)\n Source: /x/context-mode-fixture\n MCP servers:\n  context-mode\n",state);
+      const config=put(path.join(s.home,".gemini","settings.json"),'{"theme":"keep-unrelated"}\n');
+      const before=readFileSync(config,"utf8");
+      const setup=await runSetup({home:s.home,pkgDir:s.pkgDir,env,agents:["gemini"],runId:"gemini-identity"});
+      assert.equal(setup.agents[0].status,"PASS",JSON.stringify(setup));assert.ok(existsSync(state));
+      const removed=runRemove({home:s.home,env});assert.equal(removed.exitCode,0);assert.equal(existsSync(state),false);
+      assert.equal(readFileSync(config,"utf8"),before,"remove preserves unrelated user configuration");
+      const after=await runSetup({home:s.home,pkgDir:s.pkgDir,env,agents:["gemini"],dryRun:true});
+      assert.ok(after.agents[0].changes.some(c=>c.command?.includes("link")),"another extension's MCP name is not our installed extension");
+    });
+  });
+
 });
 
 describe("ADR-0019 no-regex rule for src/setup", { concurrency: CONC }, () => {

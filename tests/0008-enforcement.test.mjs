@@ -797,7 +797,7 @@ describe("ADR-0008 security rules (ported from v1)", { concurrency: CONC }, () =
       mkdirSync(join(target, "references"), { recursive: true });
       writeFileSync(join(target, "references", "api.md"), "# rule line\n".repeat(2000));
       writeFileSync(join(target, "references", "log.jsonl"), "# rule line\n".repeat(2000));
-      symlinkSync(target, join(cfg, "skills", "linked"));
+      symlinkSync(target, join(cfg, "skills", "linked"), process.platform === "win32" ? "junction" : "dir");
       const ref = join(cfg, "skills", "linked", "references", "api.md");
       assert.deepEqual(decide(ev("Read", { file_path: ref }, root), CC, [], root), { kind: "allow" }, "linked ref");
       // The POSIX fast path in isLexicallyInsideAny drops "." steps the way path.resolve does.

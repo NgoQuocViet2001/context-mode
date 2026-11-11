@@ -1,3 +1,4 @@
+import { registerOpenCodeRegressions } from "./_lib/opencode-regressions.mjs";
 // tests/0020-plugins.test.mjs
 // ADR-0020, PRD-v2 section 3: the in-process plugins (opencode, pi). Unit tests may import src/ (TECH-SPEC 6.2a).
 
@@ -17,6 +18,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 // Serial: opencode-ported, pi-ops-ported and pi-search-whole-line set process.env.HOME in before()/after(); a concurrent describe would see the wrong HOME.
 describe("ADR-0020 plugins", () => {
+  describe("ADR-0020 OpenCode regressions", registerOpenCodeRegressions);
   describe("ADR-0020 opencode plugin", () => {
     // Spec: docs/architecture/modules/12-plugins.md, §1a nativeTools filtering (DECISIONS-r9 R4).
     // 14a: opencode-v2-plugin-api (#1199) default export has id + setup; opencode2-plugin-dual-export
@@ -184,12 +186,12 @@ describe("ADR-0020 plugins", () => {
       assert.deepEqual(asked.map((a) => [a.permission, a.patterns]), [["ctx_execute", ["shell"]], ["bash", ["rm -rf build"]]]);
     });
 
-    test("execute.before: the shell tool is routed like every host (curl denied by throwing the ctx_ redirect), webfetch is denied, ls passes", async () => {
+    test("execute.before: OpenCode 2 runs shell then replaces output, webfetch is denied, ls passes", async () => {
       const f = fakeCtx(tmpdir());
       const dispose = await opencodePlugin.default.setup(f.ctx);
       const before = f.hooks.tool["execute.before"];
       const call = (tool, input) => ({ tool, sessionID: "ses_b", agent: "build", messageID: "msg_1", id: "call_1", input });
-      await assert.rejects(before(call(SHELL, { command: "curl https://example.com" })), (e) => e instanceof Error && e.message.includes("ctx_"));
+      await before(call(SHELL, { command: "curl https://example.com" }));
       await assert.rejects(before(call("webfetch", { url: "https://example.com" })), (e) => e instanceof Error && e.message !== "");
       await before(call(SHELL, { command: "ls" }));
       await dispose();
