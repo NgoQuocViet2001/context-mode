@@ -23,7 +23,7 @@ function fixture(t) {
   mkdirSync(repo);
   execFileSync("git", ["init", "-q", repo]);
   const env = {
-    ...process.env, HOME: root, USERPROFILE: root,
+    ...process.env, HOME: root, USERPROFILE: root, CLAUDE_CONFIG_DIR: join(root, ".claude"),
     CONTEXT_MODE_DATA_DIR: join(root, "actual-data"), CLAUDE_PROJECT_DIR: repo,
     CLAUDE_PLUGIN_ROOT: searchFixture(join(root, "bundle")),
   };
