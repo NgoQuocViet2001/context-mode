@@ -1,4 +1,4 @@
-import { opencodeNativeRegistration } from "../core/ops/opencode-install.ts";
+import { OpenCodeDuplicateRegistrationError, opencodeNativeRegistration } from "../core/ops/opencode-install.ts";
 // src/setup/engine.ts
 // ADR-0019 section 3 steps: preflight, detect, plan, apply, verify, rollback per agent, summary. No UI here.
 // Owner decisions D3 (hook overhead budget) and D4 (v1 forms replaced by the absolute form).
@@ -839,7 +839,12 @@ async function nativeResult(row: CheckRow, ctx: SetupContext, apply?: { run: Run
   if (row.id === "opencode") {
     let registered: string | undefined;
     try { registered = opencodeNativeRegistration([opencodeDirOf(ctx.env, ctx.home), process.cwd()], [ctx.pkgDir, path.join(ctx.pkgDir, ...OPENCODE_PLUGIN_PATH)]); }
-    catch (e) { return { id: row.id, status: "FAIL", v1: [], changes: [], checks: [], reason: String(e) }; }
+    catch (e) {
+      // A duplicate own path is repairable by the normal setup plan. Doctor also needs that
+      // plan's hook-registered check rather than a generic early failure without check rows.
+      if (e instanceof OpenCodeDuplicateRegistrationError) return undefined;
+      return { id: row.id, status: "FAIL", v1: [], changes: [], checks: [], reason: String(e) };
+    }
     if (registered !== undefined) {
       const checks: Check[] = [
         { name: "hook-registered", ok: true, detail: registered },

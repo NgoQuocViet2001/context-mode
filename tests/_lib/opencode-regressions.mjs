@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { setup, setupLegacy } from '../src/entries/opencode.ts';
-import { getAdapter, hasReplace } from '../src/adapters/table.ts';
-import { opencodeNativeRegistration } from '../src/core/ops/opencode-install.ts';
-import { checkHostConfig } from '../src/core/ops/doctor-config.ts';
-import { runDoctor, runSetup } from '../src/setup/index.ts';
+import { setup, setupLegacy } from '../../src/entries/opencode.ts';
+import { getAdapter, hasReplace } from '../../src/adapters/table.ts';
+import { opencodeNativeRegistration } from '../../src/core/ops/opencode-install.ts';
+import { checkHostConfig } from '../../src/core/ops/doctor-config.ts';
+import { runDoctor, runSetup } from '../../src/setup/index.ts';
 import { DatabaseSync } from 'node:sqlite';
 const fixture = async (f) => {
     const root = mkdtempSync(join(tmpdir(), 'cm-opencode-regression-')), home = join(root, 'home'), cwd = join(root, 'project');
@@ -41,6 +41,8 @@ async function host(cwd) {
 }
 const big = Array.from({ length: 6000 }, (_, i) => `ROW_${i} exact=${i * 17}`).join('\n');
 const event = (id, extra = {}) => ({ tool: 'bash', sessionID: 's', agent: 'build', id, input: { command: 'synthetic fixture' }, status: 'completed', result: { content: [{ type: 'text', text: big }], metadata: { custom: 'preserved' } }, ...extra });
+
+export function registerOpenCodeRegressions() {
 test('#1347 replaces OpenCode2 text, preserves metadata, indexes tail and exact journal bytes', () => fixture(async ({ cwd, root }) => {
     const h = await host(cwd), ev = event('replace');
     await h.hooks['execute.after'](ev);
@@ -95,7 +97,7 @@ test('#1348 visible tools are scoped per agent, refreshed, and bounded read avoi
     await assert.rejects(before(call('limited', 'webfetch', { url: 'https://example.com' })), /ctx_index/);
     h.stop();
 }));
-test('#1344/#1349 native JSON/JSONC and exact drop-in detection, without touching configured data', () => fixture(async ({ home, cwd, root }) => {
+test('#1344/#1349 native BOM+CRLF JSON/JSONC and exact drop-in detection, without touching configured data', () => fixture(async ({ home, cwd, root }) => {
     const cfg = join(home, '.config/opencode');
     mkdirSync(cfg, { recursive: true });
     const pkg = join(root, 'pkg');
@@ -105,7 +107,7 @@ test('#1344/#1349 native JSON/JSONC and exact drop-in detection, without touchin
     const env = { ...process.env, PATH: '', Path: '' };
     for (const [file, text] of [['opencode.json', '{"plugins":["context-mode"]}'], ['opencode.jsonc', '// comment\n{"plugins":["context-mode@2.1.7"]}']]) {
         const p = join(cfg, file);
-        writeFileSync(p, text);
+        writeFileSync(p, '\ufeff' + text.replaceAll('\n', '\r\n'));
         assert.equal(opencodeNativeRegistration([cfg]), p);
         const before = readFileSync(p, 'utf8');
         const r = await runDoctor({ home, pkgDir: pkg, env, agents: ['opencode'] });
@@ -147,3 +149,5 @@ test('#1349 ignores huge unrelated plugins and broken links, supports bounded lo
 }));
 
 test('#1344 an empty npm selector is not a native install',()=>fixture(async({home})=>{const cfg=join(home,'.config/opencode');mkdirSync(cfg,{recursive:true});writeFileSync(join(cfg,'opencode.json'),'{"plugins":["context-mode@"]}');assert.equal(opencodeNativeRegistration([cfg]),undefined);}));
+
+}

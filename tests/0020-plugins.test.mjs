@@ -1,3 +1,4 @@
+import { registerOpenCodeRegressions } from "./_lib/opencode-regressions.mjs";
 // tests/0020-plugins.test.mjs
 // ADR-0020, PRD-v2 section 3: the in-process plugins (opencode, pi). Unit tests may import src/ (TECH-SPEC 6.2a).
 
@@ -17,6 +18,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 // Serial: opencode-ported, pi-ops-ported and pi-search-whole-line set process.env.HOME in before()/after(); a concurrent describe would see the wrong HOME.
 describe("ADR-0020 plugins", () => {
+  describe("ADR-0020 OpenCode regressions", registerOpenCodeRegressions);
   describe("ADR-0020 opencode plugin", () => {
     // Spec: docs/architecture/modules/12-plugins.md, §1a nativeTools filtering (DECISIONS-r9 R4).
     // 14a: opencode-v2-plugin-api (#1199) default export has id + setup; opencode2-plugin-dual-export

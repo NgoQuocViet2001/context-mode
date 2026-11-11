@@ -2,6 +2,9 @@
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { parseHostConfig } from "./host-config.ts";
+import { hostText } from "./host-text.ts";
+
+export class OpenCodeDuplicateRegistrationError extends Error {}
 import { OPENCODE_CONFIG_FILES, SERVER_KEY } from "../contracts/constants.ts";
 
 function record(v: unknown): v is Record<string, unknown> { return typeof v === "object" && v !== null && !Array.isArray(v); }
@@ -17,7 +20,7 @@ export function opencodeNativeRegistration(dirs: readonly string[], ownPaths: re
     for (const name of OPENCODE_CONFIG_FILES) {
       const file = join(dir, name);
       if (!existsSync(file)) continue;
-      const doc = parseHostConfig("opencode", file, readFileSync(file, "utf8"), "jsonc");
+      const doc = parseHostConfig("opencode", file, hostText(readFileSync(file, "utf8")), "jsonc");
       if (record(doc)) {
         for (const key of ["plugin", "plugins"]) {
           const entries = Array.isArray(doc[key]) ? doc[key] as unknown[] : [];
@@ -62,6 +65,6 @@ export function opencodeNativeRegistration(dirs: readonly string[], ownPaths: re
       })) found = file;
     }
   }
-  if (found !== undefined && ownPathFound) throw new Error("context-mode loads twice (native registration and local package entry); remove the duplicate local entry");
+  if (found !== undefined && ownPathFound) throw new OpenCodeDuplicateRegistrationError("context-mode loads twice (native registration and local package entry); run: context-mode setup");
   return found;
 }
