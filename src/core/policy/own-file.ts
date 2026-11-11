@@ -3,13 +3,13 @@
 // $CLAUDE_CONFIG_DIR, plugin skills under plugins/cache) or in the shared ~/.agents/skills dir. They are
 // instructions: the agent needs the whole text, so the Read deny and the PostToolUse replace let them through.
 // Only Markdown files count; transcripts (.jsonl) and other data in the same dirs keep the normal rules.
-import { extname, join } from "node:path";
+import { extname, isAbsolute, join, relative, sep } from "node:path";
 import type { AgentId } from "../contracts/agents.ts";
 import { AGENT_FILE_EXT, AGENT_HOME_DIR, SHARED_SKILLS_DIR } from "../contracts/constants.ts";
 import {
   claudeDirOf, codexDirOf, copilotDirOf, geminiDirOf, homeDirOf, kiroDirOf, opencodeDirOf, piAgentDirOf, vscodeUserDirOf,
 } from "../project/config-dir.ts";
-import { isInsideAny } from "../project/contain.ts";
+import { isInside, isInsideAny } from "../project/contain.ts";
 
 /** The dirs this agent reads its own instruction and skill files from, plus the shared skill dir. */
 export function ownDirsOf(agent: AgentId, env: NodeJS.ProcessEnv): string[] {
@@ -31,5 +31,15 @@ export function ownDirsOf(agent: AgentId, env: NodeJS.ProcessEnv): string[] {
 /** True when `abs` is a Markdown file inside one of this agent's own dirs (by realpath components). */
 export function isOwnFile(agent: AgentId, abs: string, env: NodeJS.ProcessEnv = process.env): boolean {
   if (extname(abs).toLowerCase() !== AGENT_FILE_EXT) return false;
-  return isInsideAny(ownDirsOf(agent, env), abs);
+  const dirs = ownDirsOf(agent, env);
+  if (isInsideAny(dirs, abs)) return true;
+  // A skill may itself be linked to a checkout outside the config dir. Anchor at
+  // that installed skill; an unrelated link escaping its target is still external.
+  const shared = dirs.at(-1);
+  return dirs.some((dir) => {
+    const skills = dir === shared ? dir : join(dir, "skills");
+    const rel = relative(skills, abs);
+    const [name, file] = rel.split(sep);
+    return !!name && !!file && name !== ".." && !isAbsolute(rel) && isInside(join(skills, name), abs);
+  });
 }
