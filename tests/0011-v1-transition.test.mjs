@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync, existsSync,
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { detectV1 } from "../src/core/ops/detect-v1.ts";
-import { UPGRADE_ASIDE_SUFFIX, UPGRADE_MOVED_ASIDE, UPGRADE_REPORT_ONLY_REASONS, UPGRADE_NOT_FOUND, UPGRADE_REMOVED, UPGRADE_REPORT_ONLY, UPGRADE_TRASH_SUFFIX, V1_REASON } from "../src/core/contracts/constants.ts";
+import { UPGRADE_ASIDE_SUFFIX, UPGRADE_MOVED_ASIDE, UPGRADE_REPORT_ONLY_REASONS, UPGRADE_NOT_FOUND, UPGRADE_REMOVED, UPGRADE_REPORT_ONLY, UPGRADE_TRASH_SUFFIX, V1_REASON, V1_SCRIPT_NAMES } from "../src/core/contracts/constants.ts";
 import { removeV1 } from "../src/core/ops/v1-remove.ts";
 import { execFileSync, spawnSync } from "node:child_process";
 import { AGENT_IDS as SETUP_AGENT_IDS, plantV1Install, v1GlobalBin, v1NpmBinDir, v1NpmPrefix, v1Project } from "../e2e/live/cases/v1-migration-setup.mjs";
@@ -24,6 +24,49 @@ describe("ADR-0011: detect v1", { concurrency: CONC }, () => {
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     return dir;
   }
+
+  test("[M5] codex cleanup keeps custom hooks and exact-name near misses (#1364)", (t) => {
+    const home = tmp(t), dir = path.join(home, ".codex");
+    mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, "hooks.json");
+    const keep = [
+      'node "$HOME/.agents/hooks/codex/secret-guard.mjs"',
+      "node /x/hooks/codex-ko/stop.mjs", "node /x/hooks/codex/stop.mjs.bak",
+      "node /x/otherhooks/codex/stop.mjs", "node /x/hooks/codex/my-stop.mjs",
+      "node /x/hooks/codex/stop.mjs/child", "node /x/hooks/codex/guard.js",
+    ];
+    const legacy = V1_SCRIPT_NAMES.flatMap(name => [
+      `node /x/hooks/codex/${name}`, `node "C:\\x y\\hooks\\codex\\${name}" --flag`,
+    ]).concat("context-mode hook codex stop");
+    writeFileSync(file, JSON.stringify({ hooks: { PreToolUse: [{ hooks: [...keep, ...legacy].map(command => ({ type: "command", command })) }] } }));
+    const findings = detectV1("codex", home, { tmp: tmp(t) });
+    assert.deepEqual(findings.map(f => f.path), legacy.map((_, i) => `hooks.PreToolUse.0.hooks.${keep.length + i}`));
+    const removal = removeV1("codex", findings);
+    assert.deepEqual(JSON.parse(readFileSync(file, "utf8")).hooks.PreToolUse[0].hooks.map(h => h.command), keep);
+    removal.commit();
+  });
+
+  test("[M5] v2 Codex child tables survive cleanup, v1 child tables are still removed (#1359)", (t) => {
+    for (const command of ["node", "context-mode"]) {
+      const home = tmp(t), dir = path.join(home, ".codex");
+      mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, "config.toml");
+      const original = `[mcp_servers.context-mode]\ncommand = "${command}"\nargs = ["/pkg/server.mjs", "--agent", "codex"]\n` +
+        '[mcp_servers.context-mode.env]\nCONTROL = "keep"\n' +
+        '[mcp_servers.context-mode.tools.ctx_execute]\napproval_mode = "auto"\n' +
+        '[mcp_servers.context-mode.tools.ctx_batch]\napproval_mode = "prompt"\n' +
+        '[mcp_servers.unrelated.tools.ctx_execute]\napproval_mode = "prompt"\n';
+      writeFileSync(file, original);
+      const findings = detectV1("codex", home, { tmp: tmp(t) });
+      assert.equal(findings.length, command === "node" ? 0 : 4);
+      const removal = removeV1("codex", findings);
+      const after = readFileSync(file, "utf8");
+      if (command === "node") assert.equal(after, original);
+      else assert.ok(!after.includes('[mcp_servers.context-mode'));
+      assert.ok(after.includes('[mcp_servers.unrelated.tools.ctx_execute]'));
+      removal.commit();
+    }
+  });
 
   test("[M5] detect-v1/finds-legacy-mcp-entry-in-host-config", (t) => {
     const home = tmp(t);
