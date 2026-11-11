@@ -10,6 +10,7 @@ import { qwenHooksOff } from "./qwen-gate.ts";
 import { CODEX_TRUST_PATH, CODEX_UNTRUSTED_FIX, codexTrustEntries, listPluginHooks, pluginTrustEntries, untrustedPluginHooksDetail } from "./codex-trust.ts";
 import type { PluginHook } from "./codex-trust.ts";
 import { listCopilotHooks } from "./copilot-hooks.ts";
+import { geminiListsExtension } from "./gemini-list.ts";
 import { spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -461,7 +462,7 @@ function listState(row: CheckRow, env: SetupContext["env"]): { check?: Check; st
   const r = runBin(l.bin, l.args, env);
   // Gemini 0.65.0 writes the list to stderr (D-INST-2), so both streams count.
   const out = `${r.stdout}${r.stderr}`;
-  const ok = r.status === 0 && out.includes("context-mode");
+  const ok = r.status === 0 && (row.id === "gemini" ? geminiListsExtension(out, "context-mode") : out.includes("context-mode"));
   const check: Check = { name: "list", ok, detail: ok ? undefined : `${l.bin} ${l.args.join(" ")} does not list context-mode` };
   return { check, status: r.status === 0 ? statusOf(row, `${r.stdout}`) : undefined, broken: r.status === 0 ? undefined : hostBroken(l.bin, out) };
 }
