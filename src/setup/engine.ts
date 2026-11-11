@@ -1,3 +1,4 @@
+import { opencodeNativeRegistration } from "../core/ops/opencode-install.ts";
 // src/setup/engine.ts
 // ADR-0019 section 3 steps: preflight, detect, plan, apply, verify, rollback per agent, summary. No UI here.
 // Owner decisions D3 (hook overhead budget) and D4 (v1 forms replaced by the absolute form).
@@ -413,8 +414,13 @@ function opencodeListArgs(major: number): string[] {
  *  check reads that: same file choice, same Windows path, same JSONC rules as the host. */
 const OC2_CONFIG_ARGS = ["debug", "config", "--standalone"];
 function opencode2ListCheck(bin: string, env: SetupContext["env"]): Check {
-  const r = runBin(bin, OC2_CONFIG_ARGS, env);
-  const what = `${bin} ${OC2_CONFIG_ARGS.join(" ")}`;
+  let args = OC2_CONFIG_ARGS;
+  let r = runBin(bin, args, env);
+  if (r.status !== 0 && `${r.stdout}${r.stderr}`.includes("Unrecognized flag: --standalone")) {
+    args = ["debug", "config"];
+    r = runBin(bin, args, env);
+  }
+  const what = `${bin} ${args.join(" ")}`;
   let docs: unknown;
   try { docs = JSON.parse(`${r.stdout}`); } catch { docs = undefined; }
   if (r.status !== 0) return { name: "list", ok: false, detail: `${what} exited ${r.status}: ${`${r.stderr}`.trim().split("\n")[0] ?? ""}` };
@@ -830,6 +836,26 @@ function nativeRow(row: CheckRow, n: NativePlugin): CheckRow {
 /** A native plugin install: verify it as is, write nothing (a second hook copy under HOME would run twice). A listed but
  *  disabled extension is a FAIL that names the host's enable command: setup cannot link over it (D-NI-EXT-DOCTOR-1). */
 async function nativeResult(row: CheckRow, ctx: SetupContext, apply?: { run: Run; dryRun: boolean }): Promise<AgentResult | undefined> {
+  if (row.id === "opencode") {
+    let registered: string | undefined;
+    try { registered = opencodeNativeRegistration([opencodeDirOf(ctx.env, ctx.home), process.cwd()], [ctx.pkgDir, path.join(ctx.pkgDir, ...OPENCODE_PLUGIN_PATH)]); }
+    catch (e) { return { id: row.id, status: "FAIL", v1: [], changes: [], checks: [], reason: String(e) }; }
+    if (registered !== undefined) {
+      const checks: Check[] = [
+        { name: "hook-registered", ok: true, detail: registered },
+        { name: "hook-seen", ok: true, warn: true, detail: "native OpenCode plugin registration found; run ctx_doctor inside OpenCode to verify the loaded plugin" },
+      ];
+      const bin = hostBin("opencode", ctx.env).file;
+      if (bin === undefined) return { id: row.id, status: "SKIPPED", v1: [], changes: [], checks,
+        reason: "native registration found, but opencode is not on PATH; its runtime and loaded plugin were not verified" };
+      if (nodeTooOld(process.version)) return { id: row.id, status: "FAIL", v1: [], changes: [], checks,
+        reason: D2_NODE_DETAIL(process.version) + ". Fix: " + D2_NODE_FIX };
+      checks.push(await mcpCheck(row.serverCommand, ctx.env), hookRunsCheck(row, ctx.env));
+      const bad = checks.filter((c) => !c.ok);
+      return { id: row.id, status: bad.length ? "FAIL" : "PASS", v1: [], changes: [], checks, bin,
+        ...(bad.length ? { reason: bad.map((c) => `${c.name}: ${c.detail}`).join("; ") } : {}) };
+    }
+  }
   const n = row.nativePlugin;
   const { state, workspaceOff, hookGate, stopped } = nativeState(row, ctx.env);
   const bin = n ? hostBin(n.bin, ctx.env).file : undefined;
@@ -1092,6 +1118,14 @@ export async function runSetup(opts: SetupOptions): Promise<SetupResult> {
 
 async function setupRow(row: CheckRow, ctx: SetupContext, run: Run, dryRun: boolean): Promise<AgentResult> {
   const res: AgentResult = { id: row.id, status: "PASS", v1: [], changes: [], checks: [] };
+  // Verified on Windows OpenCode 2.1.4: directory entries load server.mjs and file entries are refused.
+  // Native npm/drop-in registrations are handled before this local-package fallback.
+  if (row.id === "opencode" && process.platform === "win32" && hostBin("opencode", ctx.env).file) {
+    const version = runBin("opencode", ["--version"], ctx.env);
+    if (`${version.stdout}${version.stderr}`.trim() === "opencode v2.1.4") {
+      return { ...res, status: "FAIL", reason: "OpenCode 2.1.4 on Windows cannot load the local package hook entry; run: opencode plugin add context-mode, then run ctx_doctor inside OpenCode" };
+    }
+  }
   const needsBin = !row.config && row.cli;
   if (needsBin) {
     const hb = hostBin(row.cli!.bin, ctx.env);

@@ -122,8 +122,8 @@ const BY_ID = new Map<AgentId, AdapterRow>(ADAPTERS.map((r) => [r.id, r]));
 // gemini: AfterTool decision deny + reason replaces the result (D-HA-GEMINI-REPLACE-1).
 const REPLACE_ROWS: ReadonlySet<AgentId> = new Set<AgentId>(["claude-code", "gemini", "copilot-cli", "pi"]);
 
-export function hasReplace(row: AdapterRow): boolean {
-  return REPLACE_ROWS.has(row.id);
+export function hasReplace(row: AdapterRow, ev?: { replaceSupported?: boolean }): boolean {
+  return row.id === "opencode" ? ev?.replaceSupported === true : REPLACE_ROWS.has(row.id);
 }
 
 // D-HA-GEMINI-DUMP-1: rows where a one-file shell dump over the cap runs and PostToolUse replaces it (D-M7-RR-1).

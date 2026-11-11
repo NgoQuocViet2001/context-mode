@@ -141,6 +141,13 @@ describe("ADR-0020 fire, plugin and extension hosts", { concurrency: CONC }, () 
       assert.ok(r.out.includes("ctx_execute"), r.out.slice(0, 400));
       assert.ok(r.out.length < 4000, "the model got " + r.out.length + " bytes, not the file");
     });
+    test("#1347 OpenCode 2 replaces executed non-dump shell output with a searchable preview", opts2, async () => {
+      const b = buildPlugin();
+      const r = await runHost(`node -e "process.stdout.write(require('fs').readFileSync('big.log','utf8'))"`, b.out, HOST_2);
+      assert.ok(r.toolNames.includes("ctx_search"), "search tool reaches this caller");
+      assert.match(r.out, /ctx_search/);
+      assert.ok(Buffer.byteLength(r.out) < 4000, `model got ${Buffer.byteLength(r.out)} bytes`);
+    });
     test.after?.(() => { if (built) rmSync(built.out, { recursive: true, force: true }); });
   });
 

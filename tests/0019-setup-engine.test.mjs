@@ -691,6 +691,25 @@ exit 0`);
     assert.match(doc.agents[0].reason, /mcp\.servers\.context-mode.*\/elsewhere\/opencode/);
   });
 
+  test("setup: OpenCode 2.1.4 retries debug config only when standalone is unsupported (#1349)", { skip: process.platform === "win32" && "fake agent binaries are sh scripts" }, async (t) => {
+    const s = sandbox(t);
+    const norm = path.join(s.root, "norm.mjs");
+    const log = path.join(s.root, "oc214.log");
+    writeFileSync(norm, `process.stdout.write(JSON.stringify([{info:{mcp:{servers:{"context-mode":{}}}}}]));`);
+    fakeBin(s.root, "opencode", `echo "$@" >> "${log}"
+case "$1 $2" in
+  "--version ") echo "opencode v2.1.4" ;;
+  "debug config")
+    if [ "$3" = "--standalone" ]; then echo "Unrecognized flag: --standalone in command opencode debug config" >&2; exit 1; fi
+    "${NODE}" "${norm}" ;;
+esac
+exit 0`);
+    const res = await runSetup({ home: s.home, pkgDir: s.pkgDir, env: s.env, agents: ["opencode"], runId: "r" });
+    assert.equal(res.agents[0].status, "PASS", JSON.stringify(res.agents[0], null, 2));
+    const calls = readFileSync(log, "utf8");
+    assert.ok(calls.includes("debug config --standalone") && calls.split("\n").includes("debug config"), calls);
+  });
+
   // D-SETUP-HOST-BROKEN-1 (#1308): "copilot mcp add ... exited 1: GitHub Copilot CLI: no platform package found.
   // Reinstall with `npm install -g @github/copilot`". The Copilot install itself is broken: setup reports SKIPPED with the
   // host's own fix line first, writes nothing, rolls nothing back, and the run does not fail on it.

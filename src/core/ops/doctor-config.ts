@@ -1,3 +1,4 @@
+import { opencodeNativeRegistration } from "./opencode-install.ts";
 // impl/07 §5 D3, D4, D5b; ADR-0010 (checks), ADR-0011 (v1 cleanup); DEVIATIONS D-M5-arch-3, D-M5-O1-3/4,
 // D-M5-O2-1..5, D-M5-U1-6, D-M5-D2-1..4. Read-only: every check reads files and returns one DoctorRow.
 // D3 diffs parsed data (never text): the MCP entry, the own hook entries (command + matcher composed from the
@@ -217,7 +218,7 @@ function opencodeValueListed(value: unknown): boolean {
 /** True when any OpenCode config file (config dir, then project) lists context-mode under "plugin" or "plugins", or runs its server as a local MCP entry. */
 function opencodeListed(file: string, worktree: string): boolean {
   const dirs = [dirname(file), worktree];
-  return dirs.some((dir) => OPENCODE_CONFIG_FILES.some((name) => opencodeValueListed(opencodeFileValue(join(dir, name)))));
+  return opencodeNativeRegistration(dirs, [opencodePluginFile(), join(opencodePluginFile(), ...OPENCODE_PLUGIN_PATH)]) !== undefined || dirs.some((dir) => OPENCODE_CONFIG_FILES.some((name) => opencodeValueListed(opencodeFileValue(join(dir, name)))));
 }
 
 function mcpWrong(row: AdapterRow, home: string, env: NodeJS.ProcessEnv, worktree: string): boolean {

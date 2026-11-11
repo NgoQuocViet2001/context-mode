@@ -326,6 +326,14 @@ async function preToolUse(ev: CanonicalHookEvent, row: AdapterRow, project: Proj
   const userDeny = readUserDeny(project.worktree, ev.agent);
   const decision0 = decide(ev, row, userDeny, project);
   let decision = decision0;
+  // OpenCode 2 supplies the model-visible tool inventory for this session/agent. A routing
+  // alternative that is absent must not become an impossible retry loop. User denies still win.
+  if (ev.agent === "opencode" && decision0.kind === "deny" && !isUserPolicyDeny(decision0.reason, row)
+    && ev.unavailableTools?.some((name) => decision0.reason.includes(name))) {
+    return ev.tool?.canonicalName === "Read"
+      ? { kind: "deny", reason: "context-mode: read a bounded window of this file using offset and limit." }
+      : ALLOW;
+  }
   if (decision0.kind === "deny" && isSubagentCall(ev) && !isUserPolicyDeny(decision0.reason, row)) {
     // Case A keeps decision0 (D-M3-H2-4); case B names the run.mjs wrapper for a shell call.
     // D-SUB-NOCTX-1 (#1311): a deny names only tools the caller has. A caller without ctx_* tools runs the call:
@@ -334,7 +342,7 @@ async function preToolUse(ev: CanonicalHookEvent, row: AdapterRow, project: Proj
     const set = toolSetForAgentType(ev, { projectDir: project.worktree, env });
     const subCase = pickSubagentCase(ev, set);
     const tool = ev.tool;
-    const runs = set !== null || ((ev.agentType ?? "") !== "" && hasReplace(row));
+    const runs = set !== null || ((ev.agentType ?? "") !== "" && hasReplace(row, ev));
     if (subCase === "B" && tool !== undefined && isShell(tool, row)) decision = caseB(ev, row, decision0, userDeny);
     else if (subCase !== "A" && runs) decision = ALLOW;
   }
@@ -457,7 +465,7 @@ async function postReplace(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
   if (result.keep === true) return ALLOW; // D-M2-MCP-1: an MCP result with a non-text block stays as the host made it
   // ADR-0001: one path per row, no runtime fallback. A row with no replace channel gets no replace decision on
   // any path, the subagent one too (D-STATS-RET-2): its encoder drops it, so the model gets the whole output.
-  if (!hasReplace(row)) return ALLOW;
+  if (!hasReplace(row, ev)) return ALLOW;
   let label: string;
   if (isSubagentCall(ev)) {
     const subCase = pickSubagentCase(ev, toolSetForAgentType(ev, { projectDir: project.worktree, env }));

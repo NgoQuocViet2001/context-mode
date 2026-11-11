@@ -39,6 +39,7 @@ function record(v: unknown): Record<string, unknown> {
 function readResult(p: Record<string, unknown>): ToolResultInfo {
   const text = p.output === undefined ? "" : typeof p.output === "string" ? p.output : JSON.stringify(p.output);
   const info: ToolResultInfo = { isError: p.isError === true, bytes: Buffer.byteLength(text), text };
+  if (p.keep === true) info.keep = true;
   if (typeof p.exitCode === "number") info.exitCode = p.exitCode;
   return info;
 }
@@ -53,6 +54,9 @@ export function decode(raw: unknown): CanonicalHookEvent {
   if (event === undefined) throw new Error("opencode: unknown hook event " + String(p.type));
   // No documented subagent field on OpenCode: agentId/agentType stay undefined (impl/10 §11).
   const ev: CanonicalHookEvent = { event, agent: "opencode", sessionId: String(p.sessionID ?? ""), cwd: String(p.directory ?? "") };
+  if (p.replaceSupported === true) ev.replaceSupported = true;
+  if (typeof p.agentType === "string") ev.agentType = p.agentType;
+  if (Array.isArray(p.unavailableTools)) ev.unavailableTools = p.unavailableTools.filter((x): x is string => typeof x === "string");
   if (event === "UserPromptSubmit" && typeof p.message === "string") ev.prompt = p.message;
   if (event === "PreToolUse" || event === "PostToolUse") {
     const name = String(p.tool ?? "");
@@ -65,7 +69,7 @@ export function decode(raw: unknown): CanonicalHookEvent {
 }
 
 // hint: only the session `context` hook carries text (no tool hint field). deny: only `execute.before` can fail
-// (Tool.Error(reason)), rewrite first, exit 2; the `prompt` hook cannot fail. replace: no documented field, no-op.
+// (Tool.Error(reason)), rewrite first, exit 2; the `prompt` hook cannot fail. OpenCode 2 can replace results.
 // Never throws (shared encode step 3).
 export function encode(ev: CanonicalHookEvent, d: Decision, _extra?: string): HookOutput {
   switch (d.kind) {
@@ -77,6 +81,6 @@ export function encode(ev: CanonicalHookEvent, d: Decision, _extra?: string): Ho
       if (ev.event !== "PreToolUse") return { stdout: "", exitCode: 0 };
       return { stdout: d.rewritten === undefined ? d.reason : d.rewritten + "\n" + d.reason, exitCode: 2 };
     case "replace":
-      return { stdout: "", exitCode: 0 };
+      return { stdout: ev.replaceSupported === true ? d.output : "", exitCode: 0 };
   }
 }

@@ -184,12 +184,12 @@ describe("ADR-0020 plugins", () => {
       assert.deepEqual(asked.map((a) => [a.permission, a.patterns]), [["ctx_execute", ["shell"]], ["bash", ["rm -rf build"]]]);
     });
 
-    test("execute.before: the shell tool is routed like every host (curl denied by throwing the ctx_ redirect), webfetch is denied, ls passes", async () => {
+    test("execute.before: OpenCode 2 runs shell then replaces output, webfetch is denied, ls passes", async () => {
       const f = fakeCtx(tmpdir());
       const dispose = await opencodePlugin.default.setup(f.ctx);
       const before = f.hooks.tool["execute.before"];
       const call = (tool, input) => ({ tool, sessionID: "ses_b", agent: "build", messageID: "msg_1", id: "call_1", input });
-      await assert.rejects(before(call(SHELL, { command: "curl https://example.com" })), (e) => e instanceof Error && e.message.includes("ctx_"));
+      await before(call(SHELL, { command: "curl https://example.com" }));
       await assert.rejects(before(call("webfetch", { url: "https://example.com" })), (e) => e instanceof Error && e.message !== "");
       await before(call(SHELL, { command: "ls" }));
       await dispose();
