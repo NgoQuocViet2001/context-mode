@@ -480,7 +480,7 @@ describe("PRD-v2 section 10: dispatch, replace and handle line (GP3, GP6)", () =
     writeFileSync(join(target, "references", "api.md"), content);
     writeFileSync(join(target, "references", "log.jsonl"), content);
     mkdirSync(join(root, ".claude", "skills"), { recursive: true });
-    symlinkSync(target, join(root, ".claude", "skills", "linked"));
+    symlinkSync(target, join(root, ".claude", "skills", "linked"), process.platform === "win32" ? "junction" : "dir");
     const read = (filePath, id) => cc({ hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: filePath }, tool_use_id: id, tool_response: { type: "text", file: { filePath, content, numLines: n, startLine: 1, totalLines: n } } });
     const ref = join(root, ".claude", "skills", "linked", "references", "api.md");
     assert.equal(parsed(await handleHook("claude-code", read(ref, "toolu_link"), env)), null, "the linked skill reference reaches the model whole");
