@@ -7,7 +7,7 @@ import { hostText } from "../ops/host-text.ts";
 import {
   AGENT_FILE_EXT, AGENTS_DIR_NAME, FRONTMATTER_DISALLOWED_KEY, FRONTMATTER_FENCE, FRONTMATTER_TOOLS_KEY,
   GEMINI_MCP_PREFIX, GEMINI_NAME_EXTRA_CHARS, HOST_CONFIG_DIR_NAME, HOST_PLUGINS_DIR_NAME, INSTALLED_PLUGINS_FILE,
-  MCP_NAME_JOIN, MCP_SERVER_TOOL_PREFIX, PLUGIN_AGENT_SEPARATOR, PLUGIN_KEY_SEPARATOR, TOOL_ORDER,
+  MAX_SYNCED_PLUGIN_DIRS, MCP_NAME_JOIN, MCP_SERVER_TOOL_PREFIX, PLUGIN_AGENT_SEPARATOR, PLUGIN_KEY_SEPARATOR, TOOL_ORDER,
 } from "../contracts/constants.ts";
 import type { AdapterRow, CanonicalHookEvent } from "../contracts/types.ts";
 import { getAdapter } from "../../adapters/table.ts";
@@ -132,7 +132,7 @@ function readPluginAgent(claudeDir: string, type: string): AgentDef | null {
   const synced = join(claudeDir, HOST_PLUGINS_DIR_NAME, "synced");
   try {
     const dirs = readdirSync(synced, { withFileTypes: true }).filter((d) => d.isDirectory());
-    if (dirs.length > 256) return null;
+    if (dirs.length > MAX_SYNCED_PLUGIN_DIRS) return null;
     let found: AgentDef | null = null;
     for (const dir of dirs) {
       const def = readAgentFile(join(synced, dir.name, plugin, AGENTS_DIR_NAME, agent + AGENT_FILE_EXT));
