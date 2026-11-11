@@ -161,6 +161,9 @@ export async function searchWrapperMain(argv: string[], env: NodeJS.ProcessEnv):
     return exit(RUN_FAIL_EXIT, "", SEARCH_USAGE_LINE + "\n");
   }
   try {
+    // Leave room for native shell newline conversion. Exact generated recovery calls are exempt
+    // from re-replacement under OUTPUT_CAP, even when a user configures a very low trigger.
+    const outputCap = argv[4] === "--context" ? Math.floor(OUTPUT_CAP / 2) - 1 : OUTPUT_CAP;
     let project: ProjectContext;
     if (argv[4] === "--context") {
       let binding: unknown;
@@ -180,11 +183,11 @@ export async function searchWrapperMain(argv: string[], env: NodeJS.ProcessEnv):
     const db = await openDb(project);
     let text: string;
     try {
-      text = selectChunks(db, id, terms, OUTPUT_CAP).text;
+      text = selectChunks(db, id, terms, outputCap).text;
     } finally {
       closeDb(db);
     }
-    return exit(0, capBytes(text, OUTPUT_CAP).text + "\n", "");
+    return exit(0, capBytes(text, outputCap).text + "\n", "");
   } catch (err) {
     if (err instanceof CtxError) return exit(RUN_FAIL_EXIT, "", err.toLine() + "\n");
     throw err;

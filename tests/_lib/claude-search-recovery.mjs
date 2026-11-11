@@ -25,7 +25,7 @@ function fixture(t) {
   const env = {
     ...process.env, HOME: root, USERPROFILE: root, CLAUDE_CONFIG_DIR: join(root, ".claude"),
     CONTEXT_MODE_DATA_DIR: join(root, "actual-data"), CLAUDE_PROJECT_DIR: repo,
-    CLAUDE_PLUGIN_ROOT: searchFixture(join(root, "bundle")),
+    CLAUDE_PLUGIN_ROOT: searchFixture(join(root, "bundle quote' $(echo injected) ` & Σ")),
   };
   const savedDataRoot = process.env.CONTEXT_MODE_DATA_DIR;
   process.env.CONTEXT_MODE_DATA_DIR = env.CONTEXT_MODE_DATA_DIR;
@@ -78,6 +78,11 @@ test("#1342 declared shell recovery works; no-shell and unresolved callers prese
     });
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /heldout_58137/);
+    const recovered = await handleHook("claude-code", f.payload({ agent_id: "a", agent_type: "shell",
+      tool_name: shell, tool_input: { command },
+      tool_response: { stdout: result.stdout, stderr: result.stderr, interrupted: false } }), f.env);
+    assert.equal(replacement(recovered), undefined, "actual native Bash/PowerShell render is not replaced again");
+
   }
   f.agent("empty", "[]");
   for (const type of ["empty", "read", "general-purpose", "Explore", "fork", "missing"]) {
@@ -153,4 +158,53 @@ test("a user-denied shell cannot become a recovery dead end", async (t) => {
   const out = await handleHook("claude-code", f.payload({ agent_id: "a", agent_type: "both",
     tool_name: "Read", tool_input: { file_path: "synthetic" }, tool_response: body }), f.env);
   assert.equal(replacement(out), undefined);
+});
+// A generated recovery is a native tool call too: broad matches must not create a pointer loop.
+test("bounded standalone recovery exposes requested text without creating a second pointer", async (t) => {
+  const f = fixture(t);
+  f.agent("shell", "Bash");
+  const log = Array.from({ length: 800 }, (_, i) => `token${String(i).padStart(4, "0")} value=${i} ${"x".repeat(100)}`).join("\n");
+  await handleHook("claude-code", f.payload({ agent_id: "recovery-child", agent_type: "shell",
+    tool_response: { stdout: log, stderr: "", interrupted: false } }), f.env);
+  const db = await f.open();
+  const id = db.raw.prepare("SELECT id FROM sources ORDER BY id DESC LIMIT 1").get().id;
+  const before = db.raw.prepare("SELECT count(*) AS n FROM sources").get().n;
+  const bash = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "/bin/bash";
+  for (const query of ["token0495", "value"]) {
+    const command = localSearchCommand(f.project, id, f.env, "Bash", query);
+    const result = spawnSync(bash, ["-c", command], { cwd: f.repo, env: f.env, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(Buffer.byteLength(result.stdout) <= 8192, "the final newline counts toward the bounded recovery cap");
+    if (query === "token0495") assert.match(result.stdout, /token0495 value=495/);
+    const out = await handleHook("claude-code", f.payload({ agent_id: "recovery-child", agent_type: "shell",
+      tool_use_id: "recovery-" + query, tool_input: { command },
+      tool_response: { stdout: result.stdout, stderr: result.stderr, interrupted: false } }), f.env);
+    assert.equal(replacement(out), undefined, "recovery text reaches the model instead of a second pointer");
+    const hookEntry = new URL("../../src/entries/hook.ts", import.meta.url).pathname;
+    const entryPath = process.platform === "win32" ? decodeURIComponent(hookEntry.slice(1)) : decodeURIComponent(hookEntry);
+    const lowTrigger = spawnSync(process.execPath, [entryPath, "--agent", "claude-code"], {
+      cwd: f.repo, encoding: "utf8", env: { ...f.env, CTX_REPLACE_TRIGGER_BYTES: "1" },
+      input: JSON.stringify(f.payload({ agent_id: "recovery-child", agent_type: "shell", tool_input: { command },
+        tool_response: { stdout: result.stdout, stderr: result.stderr, interrupted: false } })),
+    });
+    assert.equal(lowTrigger.status, 0, lowTrigger.stderr);
+    assert.equal(lowTrigger.stdout, "", "a trigger of one byte must not recompact validated recovery");
+    if (query === "token0495") {
+      for (const altered of [command + " ; echo unrelated", command.replace("search.mjs", "other.mjs")]) {
+        const other = await handleHook("claude-code", f.payload({ agent_id: "recovery-child", agent_type: "shell",
+          tool_input: { command: altered }, tool_response: { stdout: result.stdout, stderr: "", interrupted: false } }), f.env);
+        assert.ok(replacement(other), "unrelated commands retain normal replacement behavior");
+      }
+      const oversized = await handleHook("claude-code", f.payload({ agent_id: "recovery-child", agent_type: "shell",
+        tool_input: { command }, tool_response: { stdout: log, stderr: "", interrupted: false } }), f.env);
+      assert.ok(replacement(oversized), "even an exact command cannot bypass the bounded result limit");
+    }
+
+  }
+  assert.equal(db.raw.prepare("SELECT count(*) AS n FROM sources WHERE label LIKE '%recovery-child%'").get().n, before + 3,
+    "only the three negative/unbounded controls create new sources");
+  const unrelated = await handleHook("claude-code", f.payload({ agent_id: "recovery-child", agent_type: "shell",
+    tool_use_id: "unrelated", tool_input: { command: "unrelated synthetic output" },
+    tool_response: { stdout: log, stderr: "", interrupted: false } }), f.env);
+  assert.match(text(replacement(unrelated)), /Without MCP/);
 });

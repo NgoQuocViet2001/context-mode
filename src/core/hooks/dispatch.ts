@@ -7,7 +7,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { AGENT_IDS, type AgentId } from "../contracts/agents.ts";
 import {
   COMPACTED_META_PREFIX, COMPACT_POINTER_LINE, COMPACT_STATE_KEY, DECISION_OPTION_KEY, DECISION_SOURCE, DECISION_TOOL, EDIT_PATH_KEYS, EDIT_TOOLS, EXIT_CODE_LINE_PREFIX,
-  OWN_TOOL_PREFIX, prefixToolNames, REPLACE_CHUNK_BYTES, REPLACE_HANDLE_LINE, REPLACE_RETURN_BYTES, REPLACE_TRIGGER_BYTES, RANGE_READ_TOOLS, READ_PATH_KEYS, READ_RANGE_KEYS, SHAPE_RETURN_BYTES, PARSE_ERROR_DENY_LINE, PENDING_COMPACT_FLAG, PENDING_COMPACT_KEY,
+  OWN_TOOL_PREFIX, OUTPUT_CAP, prefixToolNames, REPLACE_CHUNK_BYTES, REPLACE_HANDLE_LINE, REPLACE_RETURN_BYTES, REPLACE_TRIGGER_BYTES, RANGE_READ_TOOLS, READ_PATH_KEYS, READ_RANGE_KEYS, SHAPE_RETURN_BYTES, PARSE_ERROR_DENY_LINE, PENDING_COMPACT_FLAG, PENDING_COMPACT_KEY,
   PENDING_COMPACT_META_PREFIX, POLICY_UNREADABLE_LINE, RECALL_KEY, RECALL_MAX_ROWS, RECALL_SEEN_META_PREFIX, RECALL_UNIT_CANDIDATES, RECALL_UNITS_SEEN_META_PREFIX, RESUME_HINT, RESUME_HINT_KEY, RUN_WRAPPER_FILE,
   RUN_WRAPPER_NODE, SHELL_TOOL, SOURCE_LABEL_MAX_CHARS, SUBAGENT_SOURCE_PREFIX, SYNC_INDEX_MAX_BYTES, TOOL_PREFIX_SLOT,
   USER_DENY_REASON_PREFIX,
@@ -37,7 +37,7 @@ import { shapeDigest } from "../index/shape.ts";
 import { indexText } from "../index/text.ts";
 import { appendDetached } from "./detached.ts";
 import { askedWords } from "./handle-query.ts";
-import { localSearchCommand } from "./search-recovery.ts";
+import { isLocalSearchRecovery, localSearchCommand } from "./search-recovery.ts";
 import { answerDecisions, askOptionLabels, optionEchoDecision, type DecisionPart } from "./decision.ts";
 import { shouldHint } from "./throttle.ts";
 import { CtxError } from "../contracts/errors.ts";
@@ -461,6 +461,10 @@ async function postReplace(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
   // step 5: replace, DECISIONS-r9 F1 split. Subagent case B/C (ADR-0016), and the main agent on a row
   // with a replace channel ("run, then replace", D-M7-RR-1, DECISIONS-r10 (1)).
   if (result.bytes <= REPLACE_TRIGGER_BYTES) return ALLOW; // D-M7-SV-1
+  // A bounded reply from our exact generated search command is already a recovery result.
+  // This is PostToolUse formatting only: the normal user-deny/permission path still runs first.
+  if (ev.agent === "claude-code" && isShell(tool, row) && !result.isError && result.bytes <= OUTPUT_CAP
+    && isLocalSearchRecovery(str(tool.input.command), project, env, tool.name)) return ALLOW;
   if (boundedRead(tool)) return ALLOW; // D-R41-READ-OFFSET-1 (#1314): the user asked for these lines
   if (ownRead(ev, tool, env)) return ALLOW; // D-R48-OWN-FILE-1 (#1326): a skill or rule file reaches the model whole
   if (result.keep === true) return ALLOW; // D-M2-MCP-1: an MCP result with a non-text block stays as the host made it
@@ -474,7 +478,8 @@ async function postReplace(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
     const tools = declaredToolSetForAgentType(ev, { projectDir: project.worktree, env });
     const hasSearch = tools?.includes(row.toolNamePrefix + "ctx_search") === true;
     const hasShell = tools?.some((t) => row.nativeTools.shell.includes(t));
-    if (tools?.includes("PowerShell") && !tools.includes("Bash")) recoveryShell = "PowerShell";
+    if (tools?.includes("Bash")) recoveryShell = "Bash";
+    else if (tools?.includes("PowerShell")) recoveryShell = "PowerShell";
     if (isSubagentCall(ev)) {
       if (hasSearch || tools === null || !hasShell) return ALLOW;
       localRecovery = hasShell === true && !hasSearch;
