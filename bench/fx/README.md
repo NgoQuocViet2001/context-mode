@@ -9,7 +9,7 @@ The measurements prove transport behavior, output retention, MCP usability and a
 - Official fx `0.0.16`, Linux x86_64 archive from `https://releases.fx.sh/v0.0.16/fx-linux-x86_64.tar.gz`.
 - Archive SHA256: `f0fb822c7be546c80bcc89d50521bc1454435e0c6f586e8420c4e2b84fa80599`.
 - Linux Node `24.15.0`, official `node-v24.15.0-linux-x64.tar.xz`; archive SHA256 `472655581fb851559730c48763e0c9d3bc25975c59d518003fc0849d3e4ba0f6`.
-- Context Mode candidate is a local source build, not a published release. The captured `candidate-bundle/server.mjs` SHA256 is `51481ebda23e84194bc08891475aa44cd4500873bae258ca9dfa4733a3a7639e`. It contains the draft fx adapter.
+- The final Context Mode candidate is an unpublished `0.0.0-dev` artifact built from source package 2.1.8 with the fx adapter. Its server SHA256 is `b040434f7d5d4b8dbf30d12e01633a1ff0382330703bdf6c1fb714e76144f9ce`. The earlier WSL exploration used a different local build, server SHA256 `51481ebda23e84194bc08891475aa44cd4500873bae258ca9dfa4733a3a7639e`. Results keep those artifacts separate.
 - No source files in either application were changed by these harnesses. The integration changes belong to a separate workstream.
 - Test HOME and project directories are created with `tempfile` on the Linux filesystem. On the tested Windows host, placing private fx state on `/mnt/d` fails because private-state permissions cannot be enforced. Workspace artifacts may remain on that mount.
 - Child environment is an allowlist with a synthetic loopback-only key. Existing personal home directories, provider credentials and normal host configuration are not loaded or changed. fx remains in `auto` permission mode; its real review traffic is answered by the local fixture and counted separately.
@@ -32,6 +32,8 @@ python3 warm.py \
   --cm-server /path/to/context-mode/server.mjs \
   --out warm-results \
   --repetitions 3
+
+python3 verify_fields.py warm-results
 ```
 
 On Windows, launch these commands inside WSL. Running them directly with Windows Python cannot execute the Linux binary. Arguments use explicit paths, so neither script depends on a developer home directory or checkout location.
@@ -63,7 +65,7 @@ For every repetition, each route gets a fresh HOME, project, CM data directory a
 
 The native control uses `grep_files` with the event ID, an exact file path and zero context lines. The CM route indexes the file once with `ctx_index`, then uses `ctx_search` for each event ID. MCP discovery happens only when the actual outgoing fx schema lacks the required tool. This allows the measurement to expose whether selection/discovery survives real process resume rather than assuming it does.
 
-These are separate CLI processes continuing one saved fx session. Startup time is included on every turn. The tested CM search defaults to worktree scope, with the explicit `activity-log` source. Successful retrieval establishes retained source content in that worktree; it does not establish fx-to-MCP session-ID propagation or automatic session hooks.
+These are separate CLI processes continuing one saved fx session. Startup time is included on every turn. The tested CM search defaults to worktree scope, with the exact `activity.log` source label observed in the index reply. Successful retrieval establishes retained source content in that worktree; it does not establish fx-to-MCP session-ID propagation or automatic session hooks.
 
 This is a fair precise-lookup control: fx does not have to dump or reread the entire file. CM can return neighboring indexed chunks, whereas native literal grep can return one matching line. Neither route is forced to produce a large raw reply. Tools are still selected by the harness policy, not by a real model.
 
@@ -74,13 +76,18 @@ This is a fair precise-lookup control: fx does not have to dump or reread the en
 - `main_request_json_bytes`: sum of compact JSON request bodies actually received by the local endpoint for main-agent calls. Includes repeated history, system messages and advertised schemas. It is not a token count, cache miss count or bill.
 - Review and title requests are recorded separately and excluded from main-request bytes. Raw `requests.json` preserves them for inspection.
 - `wall_seconds`: elapsed time around the native `fx ask` subprocess, including fx startup, actual command/MCP execution and loopback request handling. No real model inference or network latency is included.
+- The desktop and emulated guest are not CPU-pinned or resource-isolated. Timings describe these local runs and cannot establish production latency.
 - Raw stdout size is recorded independently. fx already bounds native output, so comparing raw stdout directly against CM visible output would overstate the benefit.
 - Provider usage is left null when absent. Observed cost is null. No bytes-to-token conversion or dollar estimate is invented.
 
-Each run retains raw requests, tool calls, model-visible tool results, stdout/stderr, fixture data, oracle and metrics. Summaries report medians and min/max ranges. `bench.py` and `warm.py` can be copied without runtime archives or private context to support a PR or an independent reproduction.
+Each run retains requests, tool calls, model-visible tool results, stdout/stderr, oracle and metrics. Cold runs also retain fixture files. The warm fixture is deterministically generated by the script; its original content hash was not captured before cleanup, so the result manifest labels its reconstructed hash explicitly. Summaries report medians and min/max ranges. Copy `bench.py`, `warm.py` and `verify_fields.py` together without runtime archives or private context to reproduce the measurements.
+
+The observed warm CM output clips the final JSON record after its complete HTTP status, dropping the closing brace. The strict JSON answer policy returns `NO_VERIFIED_RESULT` on that turn. The offline field checker separately verifies complete literal values from the same returned record. It never fills missing data from the oracle, and its visible-field classification does not change the original strict final-answer count.
 
 ## Preserved corrections
 
-The directories `smoke`, `smoke-v2`, and `smoke-v3` contain harness corrections, not fx/CM product failures: first the policy did not decode fx's native JSON wrapper, then it used the newer source tree's `toolbox` API against the stable binary, then it omitted MCP wrapper decoding. `smoke-v4` validated all four N+1 routes.
+Early controls contained harness corrections, not fx/CM product failures: first the policy did not decode fx's native JSON wrapper, then it used the newer source tree's `toolbox` API against the stable binary, then it omitted MCP wrapper decoding. A corrected N+1 smoke validated all four routes.
 
-`final-runs` initially omitted native retained-output recovery. Its five verbose source-lookup answers are invalid as a complete comparison, and are retained for audit. `recovery-smoke` proves the fixed native handle path. Corrected repeated source rows, when available, belong under `recovery-runs`; they replace only the five invalid source rows in the final aggregate, leaving the other 55 measured rows unchanged.
+The initial WSL matrix omitted native retained-output recovery. Its five verbose source-lookup answers are excluded from the valid comparison and retained locally for audit. A corrected native smoke proved the handle path. Five paired source-lookup repetitions on the final candidate later passed in the Debian guest. Guest timing ranges remain separate from the earlier 55 valid WSL rows.
+
+The first guest warm controls used `source:"activity-log"` after path indexing had printed `Label: activity.log`. The optional source label applies to raw-content indexing, so that mismatched filter found zero sources. Those failed CM controls remain preserved locally as a harness correction. The corrected harness indexes the file path and searches its observed exact `activity.log` label. This does not establish a CM indexing or retrieval defect. The later clipped-record limitation is retained separately, with strict and visible-field outcomes.

@@ -43,14 +43,18 @@ To try a real lookup, open fx in a project containing a test log and ask:
 
 fx discovers MCP tools on demand. Context Mode can execute a command or search a stored result when fx calls its tools. Native fx file reads and shell commands follow fx's own output handling.
 
+For follow-up searches, use the source ID printed by `ctx_index`, such as `s1`. This also works for a file whose name differs from the label you would use for pasted text. The [fx benchmarks](../../bench/fx/RESULTS.md) include the cost of discovering MCP tools.
+
 ## Remove
 
 ```sh
 context-mode setup --remove --agents fx
 ```
 
-Setup removal restores every recorded setup in the same Context Mode data directory, including runs for other agents. Use it when you want to roll back that setup history.
+Setup removal restores the saved files from every recorded setup in the same Context Mode data directory, including runs for other agents. It also restores their earlier contents if you have edited them since setup. To disconnect only the server in fx, run `fx mcp remove context-mode`; the three installed skill files remain available.
 
 ## Host support
 
 fx v0.0.16 distributes native binaries for Linux and macOS. From Windows, run fx, Node and Context Mode in the same WSL environment. Keep the fx profile on the Linux filesystem so fx can enforce its private directory permissions.
+
+The Linux x86_64 CLI was tested with Node 24.15, disposable user profiles and a local model fixture. All nine MCP tools were invoked. The host-config and MCP checks passed. Doctor warns that fx lacks an external hook channel, so it cannot automatically intercept native outputs or restore context after compaction. The version check can report unknown for an unpublished development build.

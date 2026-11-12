@@ -35,12 +35,10 @@ class WarmModel(LocalModel):
                     )
                 if self.need_index:
                     self.need_index = False
-                    return self.tool(
-                        exact[0], dict(path="activity.log", source="activity-log")
-                    )
+                    return self.tool(exact[0], dict(path="activity.log"))
                 self.looked = True
                 return self.tool(
-                    exact[0], dict(queries=[self.event], source="activity-log")
+                    exact[0], dict(queries=[self.event], source="activity.log")
                 )
         final = None
         for output in self.outputs.values():

@@ -1,73 +1,19 @@
 {
-  "schema_version": 1,
-  "environment": {
-    "os": "Linux x86_64",
-    "host": "WSL2 Ubuntu-24.04 on Windows",
-    "wsl_version": "2.7.10.0",
-    "private_state_filesystem": "Linux /tmp",
-    "artifact_filesystem": "mounted Windows data drive",
-    "python_version": "not recorded",
-    "real_model": false,
-    "model_id_is_fixture_label": "openai/gpt-5",
-    "network_model_endpoint": "127.0.0.1 only",
-    "fx_permission_mode": "auto",
-    "home": "isolated temporary directory",
-    "normal_credentials_used": false
-  },
-  "versions": {
-    "fx": {
-      "version": "0.0.16",
-      "version_observation": "Actual native --version captured before WSL outage",
-      "binary_sha256": "b8670dcc121b4289e2bdcd2a3e226fd64e3def53c976c42b42de72ee69f66cae",
-      "archive_sha256": "f0fb822c7be546c80bcc89d50521bc1454435e0c6f586e8420c4e2b84fa80599",
-      "install_route": "official Linux x86_64 release archive",
-      "source_checkout_not_used_for_runtime": "d1fdb60547a88aae7c95e37e56c5c1184e3e85a0"
-    },
-    "node": {
-      "version": "24.15.0",
-      "version_observation": "Actual Linux node --version captured before WSL outage",
-      "binary_sha256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c"
-    },
-    "context_mode": {
-      "package_version": "2.1.8",
-      "artifact_kind": "unpublished local source build including draft fx adapter",
-      "base_revision": "d55bdb551cf46f337af038caf5bd7b992886cc58",
-      "server_sha256": "51481ebda23e84194bc08891475aa44cd4500873bae258ca9dfa4733a3a7639e"
-    }
-  },
-  "method": {
-    "repetitions_per_cold_cell": 5,
-    "order": "reverse route order on even repetitions",
-    "tool_plan": "deterministic scripted policy",
-    "main_request_byte_definition": "normalized compact UTF-8 JSON including repeated history and tool schemas, excludes review and title side requests",
-    "tool_result_byte_definition": "each unique model-visible output value in UTF-8, includes native/MCP wrappers and discovery",
-    "timing": "native ask subprocess including startup and real tool work; no model inference delay; excludes fixture setup and server shutdown",
-    "token_usage": null,
-    "billed_cost_usd": null,
-    "limitations": [
-      "No autonomous model tool-choice or real-model reasoning measurement",
-      "No tokenizer, prompt-cache or dollar-saving inference",
-      "Verbose probes intentionally emit each input three times; compact controls provided",
-      "Five original source verbose rows excluded because harness omitted native retained-output recovery",
-      "Warm same-session harness not yet run in this environment due WSL launch outage"
-    ]
-  },
-  "harness": {
+  "schema_version": 2,
+  "scope": "Native fx0.0.16 vs explicit local Context Mode MCP, deterministic fake model. No real model quality, billed tokens, caching or money-savings inference.",
+  "primary_final_environment": "debian_tcg_final",
+  "scripts": {
     "bench.py": {
-      "formatted_shareable_sha256": "ea43266f1b2cd756a420a450d7493296341b8114bf2e70ae5336a1075663118b",
-      "format_only_ast_equality_verified": true,
-      "corrected_preformat_sha256": "84b39d102b53232abe657ea619abab4fafa5fb82ba0b2935e3c9d301a4d6be22",
-      "initial_60_run_harness_sha256": "not captured before the retained-output recovery correction",
-      "recovery_smoke_harness_sha256": "84b39d102b53232abe657ea619abab4fafa5fb82ba0b2935e3c9d301a4d6be22"
+      "sha256": "ea43266f1b2cd756a420a450d7493296341b8114bf2e70ae5336a1075663118b"
     },
     "warm.py": {
-      "formatted_shareable_sha256": "3b9888d4a5d73f207a4ae7498dc893bab1ca590838d1940e9cd7b374fcf6f590",
-      "format_only_ast_equality_verified": true,
-      "corrected_preformat_sha256": "873f15738991d335d1fe66aa35f8fdae6b1cefe5e64d974bd2a975dac3805180",
-      "measured_on_WSL": false
+      "sha256": "93a84ce3748df83cbeb5a448dab43959a40aab0f0c494f07cddc709b22f32a2e"
+    },
+    "verify_fields.py": {
+      "sha256": "75f3d3377df422b7ee1f513bfcd7ada4ba5c6a0bb650743bbe476d9d1f59a8a2"
     }
   },
-  "fixtures": {
+  "shared_fixtures": {
     "nplus1": {
       "same_fixture_variants_verified": 20,
       "files_sha256": {
@@ -127,7 +73,8 @@
         "src/module_45.py": "8cf338ffa08a2a1a0b490bf701b4dbbd6b9ea5fe238a10f613a65b35cb160e37",
         "src/module_46.py": "9c3eaeefd48a4ab42aaa4c1cfd0696bc56d1e4b96339ac080456d4bf8ffd0ab4",
         "src/module_47.py": "39a9a5173ce065e8103f92771c3b0f99a69f1601432d328a43fcc28c9f213b88"
-      }
+      },
+      "final_guest_hash_identical_variants_verified": 10
     },
     "test_failures": {
       "same_fixture_variants_verified": 20,
@@ -135,437 +82,1004 @@
         "analyze.py": "2c7fb4523327727e48013589cce276c0e8841869f21540d7385721a40a2d9fbc",
         "input.json": "7ca99a9c35cb7d54aa3dbb900c1d6cd73b270077896caced14899b2a0e09aff5"
       }
+    },
+    "warm_log": {
+      "records": 6000,
+      "questions": [
+        "EVENT00137",
+        "EVENT00923",
+        "EVENT01741",
+        "EVENT02893",
+        "EVENT04201",
+        "EVENT05783"
+      ],
+      "observed_bytes_all_six_conversations": [
+        947566,
+        947566,
+        947566,
+        947566,
+        947566,
+        947566
+      ],
+      "sha256": "114539126ca58db126356967e76a6b5fa742129798fd679a7304eedd8efbcb2c",
+      "hash_provenance": "Reconstructed from the deterministic generator after runtime cleanup. Actual in-run content hash was not captured. Six observed runtime fixture byte sizes match reconstructed size."
     }
   },
-  "valid_cold_rows": 55,
-  "excluded_initial_source_rows": 5,
-  "cold_summary": [
-    {
-      "task": "nplus1",
-      "route": "native-verbose",
-      "passes": 5,
-      "runs": 5,
-      "unique_tool_result_text_bytes": {
-        "median": 16384,
-        "min": 16384,
-        "max": 16384
+  "environments": {
+    "debian_tcg_final": {
+      "environment": {
+        "os": "Debian GNU/Linux 12 bookworm x86_64",
+        "kernel": "6.1.0-54-amd64",
+        "execution": "portable QEMU TCG guest",
+        "private_state": "Linux /tmp",
+        "python": "3.11.2",
+        "git": "2.39.5",
+        "node": "24.15.0",
+        "fx": "0.0.16",
+        "timing_qualification": "Within-guest comparisons only. Emulated CPU, no real model inference, no CPU pinning; do not merge with WSL or infer production latency."
       },
-      "main_request_json_bytes": {
-        "median": 81942,
-        "min": 81942,
-        "max": 81942
+      "versions": {
+        "fx": {
+          "version": "0.0.16",
+          "version_observation": "Actual native --version captured before WSL outage",
+          "binary_sha256": "b8670dcc121b4289e2bdcd2a3e226fd64e3def53c976c42b42de72ee69f66cae",
+          "archive_sha256": "f0fb822c7be546c80bcc89d50521bc1454435e0c6f586e8420c4e2b84fa80599",
+          "install_route": "official Linux x86_64 release archive",
+          "source_checkout_not_used_for_runtime": "d1fdb60547a88aae7c95e37e56c5c1184e3e85a0"
+        },
+        "node": {
+          "version": "24.15.0",
+          "version_observation": "Actual Linux node --version captured before WSL outage",
+          "binary_sha256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c"
+        },
+        "context_mode": {
+          "artifact_package_version": "0.0.0-dev",
+          "source_package_version": "2.1.8",
+          "source_base_revision": "d55bdb551cf46f337af038caf5bd7b992886cc58",
+          "artifact_kind": "unpublished source build including fx adapter",
+          "server_sha256": "b040434f7d5d4b8dbf30d12e01633a1ff0382330703bdf6c1fb714e76144f9ce",
+          "cli_sha256": "ecef09ce8b586d44801c1a272d033303ef83e9bb589531fe6ebac625e949bb1e"
+        }
       },
-      "wall_seconds": {
-        "median": 0.15721432099996946,
-        "min": 0.14767407800002275,
-        "max": 0.19032790900001828
+      "source_lookup_repeated": [
+        {
+          "task": "source_lookup",
+          "route": "native-verbose",
+          "passes": 5,
+          "runs": 5,
+          "wall_seconds": {
+            "median": 1.412197400000025,
+            "min": 1.3178974999999582,
+            "max": 2.27304840000005
+          },
+          "unique_tool_result_text_bytes": {
+            "median": 16681,
+            "min": 16681,
+            "max": 16681
+          },
+          "unique_tool_result_json_bytes": {
+            "median": 18327,
+            "min": 18327,
+            "max": 18327
+          },
+          "main_request_json_bytes": {
+            "median": 129268,
+            "min": 129268,
+            "max": 129268
+          },
+          "model_requests": {
+            "median": 3,
+            "min": 3,
+            "max": 3
+          },
+          "tool_calls": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "source_lookup",
+          "route": "cm-verbose",
+          "passes": 5,
+          "runs": 5,
+          "wall_seconds": {
+            "median": 8.19697930000001,
+            "min": 6.9880943,
+            "max": 8.556196899999975
+          },
+          "unique_tool_result_text_bytes": {
+            "median": 7552,
+            "min": 7552,
+            "max": 7552
+          },
+          "unique_tool_result_json_bytes": {
+            "median": 8126,
+            "min": 8126,
+            "max": 8126
+          },
+          "main_request_json_bytes": {
+            "median": 120444,
+            "min": 120444,
+            "max": 120444
+          },
+          "model_requests": {
+            "median": 3,
+            "min": 3,
+            "max": 3
+          },
+          "tool_calls": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "nplus1_final_smoke": [
+        {
+          "task": "nplus1",
+          "route": "native-verbose",
+          "passes": 1,
+          "runs": 1,
+          "wall_seconds": {
+            "median": 1.1523318999999788,
+            "min": 1.1523318999999788,
+            "max": 1.1523318999999788
+          },
+          "unique_tool_result_text_bytes": {
+            "median": 16384,
+            "min": 16384,
+            "max": 16384
+          },
+          "unique_tool_result_json_bytes": {
+            "median": 20078,
+            "min": 20078,
+            "max": 20078
+          },
+          "main_request_json_bytes": {
+            "median": 81904,
+            "min": 81904,
+            "max": 81904
+          },
+          "model_requests": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "tool_calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "nplus1",
+          "route": "cm-verbose",
+          "passes": 1,
+          "runs": 1,
+          "wall_seconds": {
+            "median": 7.585483000000011,
+            "min": 7.585483000000011,
+            "max": 7.585483000000011
+          },
+          "unique_tool_result_text_bytes": {
+            "median": 9813,
+            "min": 9813,
+            "max": 9813
+          },
+          "unique_tool_result_json_bytes": {
+            "median": 11153,
+            "min": 11153,
+            "max": 11153
+          },
+          "main_request_json_bytes": {
+            "median": 123546,
+            "min": 123546,
+            "max": 123546
+          },
+          "model_requests": {
+            "median": 3,
+            "min": 3,
+            "max": 3
+          },
+          "tool_calls": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "warm": {
+        "definition": "Six real ask/resume prompts per conversation, three conversations per route; bytes/calls/times are per-conversation medians and ranges, pass counts aggregate all18 prompts. Worktree-scope retained-source lookup, not automatic hooks/session-ID proof.",
+        "strict_final_answer_summary": [
+          {
+            "route": "native",
+            "passes": 18,
+            "turns": 18,
+            "total_wall_seconds": {
+              "median": 1.614481699999942,
+              "min": 1.4493110000000797,
+              "max": 2.1464063000000237
+            },
+            "total_tool_result_text_bytes": {
+              "median": 1272,
+              "min": 1272,
+              "max": 1272
+            },
+            "total_main_request_json_bytes": {
+              "median": 405826,
+              "min": 405826,
+              "max": 405826
+            },
+            "total_tool_calls": {
+              "median": 6,
+              "min": 6,
+              "max": 6
+            },
+            "total_model_requests": {
+              "median": 12,
+              "min": 12,
+              "max": 12
+            }
+          },
+          {
+            "route": "cm",
+            "passes": 15,
+            "turns": 18,
+            "total_wall_seconds": {
+              "median": 44.39639509999995,
+              "min": 44.07345080000016,
+              "max": 45.24501269999996
+            },
+            "total_tool_result_text_bytes": {
+              "median": 43819,
+              "min": 43819,
+              "max": 43819
+            },
+            "total_main_request_json_bytes": {
+              "median": 1149765,
+              "min": 1149765,
+              "max": 1149765
+            },
+            "total_tool_calls": {
+              "median": 13,
+              "min": 13,
+              "max": 13
+            },
+            "total_model_requests": {
+              "median": 19,
+              "min": 19,
+              "max": 19
+            }
+          }
+        ],
+        "visible_field_summary": {
+          "native": {
+            "queries": 18,
+            "visible_field_passes": 18,
+            "strict_record_json": 18
+          },
+          "cm": {
+            "queries": 18,
+            "visible_field_passes": 18,
+            "strict_record_json": 15
+          }
+        },
+        "clipped_records": [
+          {
+            "run": "cm-1",
+            "call_id": "call_13",
+            "event": "EVENT05783",
+            "visible_field_pass": true,
+            "strict_record_json": false,
+            "observed": {
+              "fields": {
+                "event": "EVENT05783",
+                "endpoint": "/accounts",
+                "status": 503,
+                "latency_ms": 1107,
+                "release": "r3"
+              },
+              "strict_json": false,
+              "record": "{\"detail\": \"Synthetic unrelated operational details 5783\", \"endpoint\": \"/accounts\", \"event\": \"EVENT05783\", \"latency_ms\": 1107, \"release\": \"r3\", \"status\": 503"
+            }
+          },
+          {
+            "run": "cm-2",
+            "call_id": "call_13",
+            "event": "EVENT05783",
+            "visible_field_pass": true,
+            "strict_record_json": false,
+            "observed": {
+              "fields": {
+                "event": "EVENT05783",
+                "endpoint": "/accounts",
+                "status": 503,
+                "latency_ms": 1107,
+                "release": "r3"
+              },
+              "strict_json": false,
+              "record": "{\"detail\": \"Synthetic unrelated operational details 5783\", \"endpoint\": \"/accounts\", \"event\": \"EVENT05783\", \"latency_ms\": 1107, \"release\": \"r3\", \"status\": 503"
+            }
+          },
+          {
+            "run": "cm-3",
+            "call_id": "call_13",
+            "event": "EVENT05783",
+            "visible_field_pass": true,
+            "strict_record_json": false,
+            "observed": {
+              "fields": {
+                "event": "EVENT05783",
+                "endpoint": "/accounts",
+                "status": 503,
+                "latency_ms": 1107,
+                "release": "r3"
+              },
+              "strict_json": false,
+              "record": "{\"detail\": \"Synthetic unrelated operational details 5783\", \"endpoint\": \"/accounts\", \"event\": \"EVENT05783\", \"latency_ms\": 1107, \"release\": \"r3\", \"status\": 503"
+            }
+          }
+        ],
+        "classification": "Strict CM final answers remain15/18. All18 reply records expose all five unambiguous literal answer fields; the final record lacks closing brace in each conversation. Offline classification does not rewrite final answers.",
+        "field_checker": "verify_fields.py",
+        "no_rerun_after_clipping": true
       },
-      "model_requests": {
-        "median": 2,
-        "min": 2,
-        "max": 2
-      },
-      "tool_calls": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      },
-      "review_requests": {
-        "median": 1,
-        "min": 1,
-        "max": 1
+      "ancillary": {
+        "benchmark_counts_exclude_these_checks": true,
+        "nine_tool_smoke": {
+          "artifactHashes": {
+            "cli.mjs": "ecef09ce8b586d44801c1a272d033303ef83e9bb589531fe6ebac625e949bb1e",
+            "server.mjs": "b040434f7d5d4b8dbf30d12e01633a1ff0382330703bdf6c1fb714e76144f9ce"
+          },
+          "cases": [
+            {
+              "case": "core",
+              "checks": {
+                "fx_exit_zero": true,
+                "every_planned_result_received": true,
+                "every_actual_result_isError_false": true,
+                "unrelated_mcp_semantics_preserved": true,
+                "unrelated_root_preserved": true,
+                "unrelated_workspace_bytes_preserved": true,
+                "execute_oracle": true,
+                "batch_oracle": true,
+                "index_keeper_oracle": true,
+                "index_disposable_oracle": true,
+                "search_oracle": true,
+                "resume_nonempty_no_error": true,
+                "stats_report": true,
+                "doctor_host_config_PASS": true,
+                "doctor_hook_WARN": true,
+                "doctor_hook_limitation": true,
+                "purge_positive_synthetic_rows": true,
+                "purged_source_absent": true,
+                "unrelated_source_preserved": true
+              },
+              "pass": true,
+              "toolInvocations": 11,
+              "distinctTools": [
+                "ctx_batch",
+                "ctx_doctor",
+                "ctx_execute",
+                "ctx_index",
+                "ctx_purge",
+                "ctx_resume",
+                "ctx_search",
+                "ctx_stats"
+              ]
+            },
+            {
+              "case": "upgrade-disposable",
+              "checks": {
+                "fx_exit_zero": true,
+                "every_planned_result_received": true,
+                "every_actual_result_isError_false": true,
+                "unrelated_mcp_semantics_preserved": true,
+                "unrelated_root_preserved": true,
+                "unrelated_workspace_bytes_preserved": true,
+                "upgrade_change_table": true,
+                "upgrade_restart_needed": true,
+                "tool_usable_after_upgrade": true,
+                "stats_after_upgrade": true,
+                "candidate_copy_cli_unchanged": true,
+                "candidate_copy_server_unchanged": true
+              },
+              "pass": true,
+              "toolInvocations": 3,
+              "distinctTools": [
+                "ctx_execute",
+                "ctx_stats",
+                "ctx_upgrade"
+              ]
+            }
+          ],
+          "distinctInvokedTools": [
+            "ctx_batch",
+            "ctx_doctor",
+            "ctx_execute",
+            "ctx_index",
+            "ctx_purge",
+            "ctx_resume",
+            "ctx_search",
+            "ctx_stats",
+            "ctx_upgrade"
+          ],
+          "pass": true,
+          "qualification": "Actual native fx tool calls with a controlled loopback model. Doctor online version check may be UNKNOWN offline; D5 WARN is expected. Upgrade rewrites only disposable profile config; no package install. Purge deletes only the newly-created synthetic source."
+        },
+        "lifecycle": {
+          "commands": [
+            {
+              "label": "setup",
+              "exit_code": 0
+            },
+            {
+              "label": "repeat-setup",
+              "exit_code": 0
+            },
+            {
+              "label": "doctor",
+              "exit_code": 0
+            },
+            {
+              "label": "native-list",
+              "exit_code": 0
+            },
+            {
+              "label": "native-show",
+              "exit_code": 0
+            },
+            {
+              "label": "remove",
+              "exit_code": 0
+            },
+            {
+              "label": "repeat-remove",
+              "exit_code": 0
+            }
+          ],
+          "unrelated_profile_preserved": true,
+          "unrelated_custom_root_untouched": true,
+          "config_mode_before": "0o644",
+          "config_mode_installed": "0o600",
+          "config_mode_restored": "0o644"
+        }
       }
     },
-    {
-      "task": "nplus1",
-      "route": "cm-verbose",
-      "passes": 5,
-      "runs": 5,
-      "unique_tool_result_text_bytes": {
-        "median": 9813,
-        "min": 9813,
-        "max": 9813
+    "wsl_exploratory_draft": {
+      "schema_version": 1,
+      "environment": {
+        "os": "Linux x86_64",
+        "host": "WSL2 Ubuntu-24.04 on Windows",
+        "wsl_version": "2.7.10.0",
+        "private_state_filesystem": "Linux /tmp",
+        "artifact_filesystem": "mounted Windows data drive",
+        "python_version": "not recorded",
+        "real_model": false,
+        "model_id_is_fixture_label": "openai/gpt-5",
+        "network_model_endpoint": "127.0.0.1 only",
+        "fx_permission_mode": "auto",
+        "home": "isolated temporary directory",
+        "normal_credentials_used": false
       },
-      "main_request_json_bytes": {
-        "median": 123603,
-        "min": 123603,
-        "max": 123603
+      "versions": {
+        "fx": {
+          "version": "0.0.16",
+          "version_observation": "Actual native --version captured before WSL outage",
+          "binary_sha256": "b8670dcc121b4289e2bdcd2a3e226fd64e3def53c976c42b42de72ee69f66cae",
+          "archive_sha256": "f0fb822c7be546c80bcc89d50521bc1454435e0c6f586e8420c4e2b84fa80599",
+          "install_route": "official Linux x86_64 release archive",
+          "source_checkout_not_used_for_runtime": "d1fdb60547a88aae7c95e37e56c5c1184e3e85a0"
+        },
+        "node": {
+          "version": "24.15.0",
+          "version_observation": "Actual Linux node --version captured before WSL outage",
+          "binary_sha256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c"
+        },
+        "context_mode": {
+          "package_version": "0.0.0-dev",
+          "artifact_kind": "unpublished local source build including draft fx adapter",
+          "base_revision": "d55bdb551cf46f337af038caf5bd7b992886cc58",
+          "server_sha256": "51481ebda23e84194bc08891475aa44cd4500873bae258ca9dfa4733a3a7639e",
+          "source_package_version": "2.1.8"
+        }
       },
-      "wall_seconds": {
-        "median": 0.6472531340000387,
-        "min": 0.4509050689999867,
-        "max": 0.7046266319999859
+      "method": {
+        "repetitions_per_cold_cell": 5,
+        "order": "reverse route order on even repetitions",
+        "tool_plan": "deterministic scripted policy",
+        "main_request_byte_definition": "normalized compact UTF-8 JSON including repeated history and tool schemas, excludes review and title side requests",
+        "tool_result_byte_definition": "each unique model-visible output value in UTF-8, includes native/MCP wrappers and discovery",
+        "timing": "native ask subprocess including startup and real tool work; no model inference delay; excludes fixture setup and server shutdown",
+        "token_usage": null,
+        "billed_cost_usd": null,
+        "limitations": [
+          "No autonomous model tool-choice or real-model reasoning measurement",
+          "No tokenizer, prompt-cache or dollar-saving inference",
+          "Verbose probes intentionally emit each input three times; compact controls provided",
+          "Five original source verbose rows excluded because harness omitted native retained-output recovery",
+          "Warm same-session harness not yet run in this environment due WSL launch outage",
+          "Timings are local descriptive measurements; no CPU pinning or resource isolation."
+        ]
       },
-      "model_requests": {
-        "median": 3,
-        "min": 3,
-        "max": 3
+      "harness": {
+        "bench.py": {
+          "formatted_shareable_sha256": "ea43266f1b2cd756a420a450d7493296341b8114bf2e70ae5336a1075663118b",
+          "format_only_ast_equality_verified": true,
+          "corrected_preformat_sha256": "84b39d102b53232abe657ea619abab4fafa5fb82ba0b2935e3c9d301a4d6be22",
+          "initial_60_run_harness_sha256": "not captured before the retained-output recovery correction",
+          "recovery_smoke_harness_sha256": "84b39d102b53232abe657ea619abab4fafa5fb82ba0b2935e3c9d301a4d6be22"
+        },
+        "warm.py": {
+          "formatted_shareable_sha256": "93a84ce3748df83cbeb5a448dab43959a40aab0f0c494f07cddc709b22f32a2e",
+          "format_only_ast_equality_verified": false,
+          "corrected_preformat_sha256": "873f15738991d335d1fe66aa35f8fdae6b1cefe5e64d974bd2a975dac3805180",
+          "measured_on_WSL": false,
+          "initial_formatted_harness_sha256": "3b9888d4a5d73f207a4ae7498dc893bab1ca590838d1940e9cd7b374fcf6f590",
+          "correction": "After actual guest index reply Label: activity.log, removed ineffective source from path indexing and searched exact activity.log label; failed first controls retained."
+        }
       },
-      "tool_calls": {
-        "median": 2,
-        "min": 2,
-        "max": 2
+      "valid_cold_rows": 55,
+      "excluded_initial_source_rows": 5,
+      "cold_summary": [
+        {
+          "task": "nplus1",
+          "route": "native-verbose",
+          "passes": 5,
+          "runs": 5,
+          "unique_tool_result_text_bytes": {
+            "median": 16384,
+            "min": 16384,
+            "max": 16384
+          },
+          "main_request_json_bytes": {
+            "median": 81942,
+            "min": 81942,
+            "max": 81942
+          },
+          "wall_seconds": {
+            "median": 0.15721432099996946,
+            "min": 0.14767407800002275,
+            "max": 0.19032790900001828
+          },
+          "model_requests": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "tool_calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "nplus1",
+          "route": "cm-verbose",
+          "passes": 5,
+          "runs": 5,
+          "unique_tool_result_text_bytes": {
+            "median": 9813,
+            "min": 9813,
+            "max": 9813
+          },
+          "main_request_json_bytes": {
+            "median": 123603,
+            "min": 123603,
+            "max": 123603
+          },
+          "wall_seconds": {
+            "median": 0.6472531340000387,
+            "min": 0.4509050689999867,
+            "max": 0.7046266319999859
+          },
+          "model_requests": {
+            "median": 3,
+            "min": 3,
+            "max": 3
+          },
+          "tool_calls": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "nplus1",
+          "route": "native-compact",
+          "passes": 5,
+          "runs": 5,
+          "unique_tool_result_text_bytes": {
+            "median": 539,
+            "min": 539,
+            "max": 539
+          },
+          "main_request_json_bytes": {
+            "median": 62555,
+            "min": 62555,
+            "max": 62555
+          },
+          "wall_seconds": {
+            "median": 0.14019654200001241,
+            "min": 0.13472581399997807,
+            "max": 0.16535096600000543
+          },
+          "model_requests": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "tool_calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "nplus1",
+          "route": "cm-compact",
+          "passes": 5,
+          "runs": 5,
+          "unique_tool_result_text_bytes": {
+            "median": 5594,
+            "min": 5594,
+            "max": 5594
+          },
+          "main_request_json_bytes": {
+            "median": 118440,
+            "min": 118440,
+            "max": 118440
+          },
+          "wall_seconds": {
+            "median": 0.7172160810000037,
+            "min": 0.6545565349999833,
+            "max": 0.8068288019999841
+          },
+          "model_requests": {
+            "median": 3,
+            "min": 3,
+            "max": 3
+          },
+          "tool_calls": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "test_failures",
+          "route": "native-verbose",
+          "passes": 5,
+          "runs": 5,
+          "unique_tool_result_text_bytes": {
+            "median": 16384,
+            "min": 16384,
+            "max": 16384
+          },
+          "main_request_json_bytes": {
+            "median": 83632,
+            "min": 83632,
+            "max": 83632
+          },
+          "wall_seconds": {
+            "median": 0.15765355700000327,
+            "min": 0.14723669400001427,
+            "max": 0.1945298400000297
+          },
+          "model_requests": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "tool_calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "test_failures",
+          "route": "cm-verbose",
+          "passes": 5,
+          "runs": 5,
+          "unique_tool_result_text_bytes": {
+            "median": 6283,
+            "min": 6283,
+            "max": 6283
+          },
+          "main_request_json_bytes": {
+            "median": 119231,
+            "min": 119231,
+            "max": 119231
+          },
+          "wall_seconds": {
+            "median": 0.6631181540000171,
+            "min": 0.6351615300000049,
+            "max": 0.857137755999986
+          },
+          "model_requests": {
+            "median": 3,
+            "min": 3,
+            "max": 3
+          },
+          "tool_calls": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "test_failures",
+          "route": "native-compact",
+          "passes": 5,
+          "runs": 5,
+          "unique_tool_result_text_bytes": {
+            "median": 690,
+            "min": 690,
+            "max": 690
+          },
+          "main_request_json_bytes": {
+            "median": 62672,
+            "min": 62672,
+            "max": 62672
+          },
+          "wall_seconds": {
+            "median": 0.14358606000001828,
+            "min": 0.1405996459999983,
+            "max": 0.17566972800000258
+          },
+          "model_requests": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "tool_calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "test_failures",
+          "route": "cm-compact",
+          "passes": 5,
+          "runs": 5,
+          "unique_tool_result_text_bytes": {
+            "median": 5745,
+            "min": 5745,
+            "max": 5745
+          },
+          "main_request_json_bytes": {
+            "median": 118520,
+            "min": 118520,
+            "max": 118520
+          },
+          "wall_seconds": {
+            "median": 0.67074818399999,
+            "min": 0.6501751800000193,
+            "max": 0.9052548860000229
+          },
+          "model_requests": {
+            "median": 3,
+            "min": 3,
+            "max": 3
+          },
+          "tool_calls": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "source_lookup",
+          "route": "cm-verbose",
+          "passes": 5,
+          "runs": 5,
+          "unique_tool_result_text_bytes": {
+            "median": 7552,
+            "min": 7552,
+            "max": 7552
+          },
+          "main_request_json_bytes": {
+            "median": 120501,
+            "min": 120501,
+            "max": 120501
+          },
+          "wall_seconds": {
+            "median": 0.7247695380000323,
+            "min": 0.6713041389999717,
+            "max": 1.0359098149999681
+          },
+          "model_requests": {
+            "median": 3,
+            "min": 3,
+            "max": 3
+          },
+          "tool_calls": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "source_lookup",
+          "route": "native-compact",
+          "passes": 5,
+          "runs": 5,
+          "unique_tool_result_text_bytes": {
+            "median": 556,
+            "min": 556,
+            "max": 556
+          },
+          "main_request_json_bytes": {
+            "median": 62526,
+            "min": 62526,
+            "max": 62526
+          },
+          "wall_seconds": {
+            "median": 0.16511657199998808,
+            "min": 0.14102152800001022,
+            "max": 0.18491146999997454
+          },
+          "model_requests": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "tool_calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task": "source_lookup",
+          "route": "cm-compact",
+          "passes": 5,
+          "runs": 5,
+          "unique_tool_result_text_bytes": {
+            "median": 5611,
+            "min": 5611,
+            "max": 5611
+          },
+          "main_request_json_bytes": {
+            "median": 118386,
+            "min": 118386,
+            "max": 118386
+          },
+          "wall_seconds": {
+            "median": 0.7279315019999899,
+            "min": 0.6216807570000356,
+            "max": 1.3787518950000504
+          },
+          "model_requests": {
+            "median": 3,
+            "min": 3,
+            "max": 3
+          },
+          "tool_calls": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "review_requests": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "native_source_recovery_smoke": {
+        "task": "source_lookup",
+        "route": "native-verbose",
+        "repetition": 1,
+        "exit_code": 0,
+        "wall_seconds": 0.2018144260000554,
+        "oracle_pass": true,
+        "final": {
+          "base_ms": 250,
+          "cap_ms": 8000,
+          "function": "compute_retry_delay",
+          "path": "src/module_31.py"
+        },
+        "model_requests": 3,
+        "review_requests": 1,
+        "title_requests": 1,
+        "tool_calls": 2,
+        "unique_tool_result_text_bytes": 16681,
+        "unique_tool_result_json_bytes": 18327,
+        "main_request_json_bytes": 129325,
+        "usage": {
+          "input_tokens": null,
+          "output_tokens": null
+        },
+        "observed_cost_usd": null,
+        "fixture_raw_output_bytes": 96070
       },
-      "review_requests": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      }
-    },
-    {
-      "task": "nplus1",
-      "route": "native-compact",
-      "passes": 5,
-      "runs": 5,
-      "unique_tool_result_text_bytes": {
-        "median": 539,
-        "min": 539,
-        "max": 539
-      },
-      "main_request_json_bytes": {
-        "median": 62555,
-        "min": 62555,
-        "max": 62555
-      },
-      "wall_seconds": {
-        "median": 0.14019654200001241,
-        "min": 0.13472581399997807,
-        "max": 0.16535096600000543
-      },
-      "model_requests": {
-        "median": 2,
-        "min": 2,
-        "max": 2
-      },
-      "tool_calls": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      },
-      "review_requests": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      }
-    },
-    {
-      "task": "nplus1",
-      "route": "cm-compact",
-      "passes": 5,
-      "runs": 5,
-      "unique_tool_result_text_bytes": {
-        "median": 5594,
-        "min": 5594,
-        "max": 5594
-      },
-      "main_request_json_bytes": {
-        "median": 118440,
-        "min": 118440,
-        "max": 118440
-      },
-      "wall_seconds": {
-        "median": 0.7172160810000037,
-        "min": 0.6545565349999833,
-        "max": 0.8068288019999841
-      },
-      "model_requests": {
-        "median": 3,
-        "min": 3,
-        "max": 3
-      },
-      "tool_calls": {
-        "median": 2,
-        "min": 2,
-        "max": 2
-      },
-      "review_requests": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      }
-    },
-    {
-      "task": "test_failures",
-      "route": "native-verbose",
-      "passes": 5,
-      "runs": 5,
-      "unique_tool_result_text_bytes": {
-        "median": 16384,
-        "min": 16384,
-        "max": 16384
-      },
-      "main_request_json_bytes": {
-        "median": 83632,
-        "min": 83632,
-        "max": 83632
-      },
-      "wall_seconds": {
-        "median": 0.15765355700000327,
-        "min": 0.14723669400001427,
-        "max": 0.1945298400000297
-      },
-      "model_requests": {
-        "median": 2,
-        "min": 2,
-        "max": 2
-      },
-      "tool_calls": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      },
-      "review_requests": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      }
-    },
-    {
-      "task": "test_failures",
-      "route": "cm-verbose",
-      "passes": 5,
-      "runs": 5,
-      "unique_tool_result_text_bytes": {
-        "median": 6283,
-        "min": 6283,
-        "max": 6283
-      },
-      "main_request_json_bytes": {
-        "median": 119231,
-        "min": 119231,
-        "max": 119231
-      },
-      "wall_seconds": {
-        "median": 0.6631181540000171,
-        "min": 0.6351615300000049,
-        "max": 0.857137755999986
-      },
-      "model_requests": {
-        "median": 3,
-        "min": 3,
-        "max": 3
-      },
-      "tool_calls": {
-        "median": 2,
-        "min": 2,
-        "max": 2
-      },
-      "review_requests": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      }
-    },
-    {
-      "task": "test_failures",
-      "route": "native-compact",
-      "passes": 5,
-      "runs": 5,
-      "unique_tool_result_text_bytes": {
-        "median": 690,
-        "min": 690,
-        "max": 690
-      },
-      "main_request_json_bytes": {
-        "median": 62672,
-        "min": 62672,
-        "max": 62672
-      },
-      "wall_seconds": {
-        "median": 0.14358606000001828,
-        "min": 0.1405996459999983,
-        "max": 0.17566972800000258
-      },
-      "model_requests": {
-        "median": 2,
-        "min": 2,
-        "max": 2
-      },
-      "tool_calls": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      },
-      "review_requests": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      }
-    },
-    {
-      "task": "test_failures",
-      "route": "cm-compact",
-      "passes": 5,
-      "runs": 5,
-      "unique_tool_result_text_bytes": {
-        "median": 5745,
-        "min": 5745,
-        "max": 5745
-      },
-      "main_request_json_bytes": {
-        "median": 118520,
-        "min": 118520,
-        "max": 118520
-      },
-      "wall_seconds": {
-        "median": 0.67074818399999,
-        "min": 0.6501751800000193,
-        "max": 0.9052548860000229
-      },
-      "model_requests": {
-        "median": 3,
-        "min": 3,
-        "max": 3
-      },
-      "tool_calls": {
-        "median": 2,
-        "min": 2,
-        "max": 2
-      },
-      "review_requests": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      }
-    },
-    {
-      "task": "source_lookup",
-      "route": "cm-verbose",
-      "passes": 5,
-      "runs": 5,
-      "unique_tool_result_text_bytes": {
-        "median": 7552,
-        "min": 7552,
-        "max": 7552
-      },
-      "main_request_json_bytes": {
-        "median": 120501,
-        "min": 120501,
-        "max": 120501
-      },
-      "wall_seconds": {
-        "median": 0.7247695380000323,
-        "min": 0.6713041389999717,
-        "max": 1.0359098149999681
-      },
-      "model_requests": {
-        "median": 3,
-        "min": 3,
-        "max": 3
-      },
-      "tool_calls": {
-        "median": 2,
-        "min": 2,
-        "max": 2
-      },
-      "review_requests": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      }
-    },
-    {
-      "task": "source_lookup",
-      "route": "native-compact",
-      "passes": 5,
-      "runs": 5,
-      "unique_tool_result_text_bytes": {
-        "median": 556,
-        "min": 556,
-        "max": 556
-      },
-      "main_request_json_bytes": {
-        "median": 62526,
-        "min": 62526,
-        "max": 62526
-      },
-      "wall_seconds": {
-        "median": 0.16511657199998808,
-        "min": 0.14102152800001022,
-        "max": 0.18491146999997454
-      },
-      "model_requests": {
-        "median": 2,
-        "min": 2,
-        "max": 2
-      },
-      "tool_calls": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      },
-      "review_requests": {
-        "median": 1,
-        "min": 1,
-        "max": 1
-      }
-    },
-    {
-      "task": "source_lookup",
-      "route": "cm-compact",
-      "passes": 5,
-      "runs": 5,
-      "unique_tool_result_text_bytes": {
-        "median": 5611,
-        "min": 5611,
-        "max": 5611
-      },
-      "main_request_json_bytes": {
-        "median": 118386,
-        "min": 118386,
-        "max": 118386
-      },
-      "wall_seconds": {
-        "median": 0.7279315019999899,
-        "min": 0.6216807570000356,
-        "max": 1.3787518950000504
-      },
-      "model_requests": {
-        "median": 3,
-        "min": 3,
-        "max": 3
-      },
-      "tool_calls": {
-        "median": 2,
-        "min": 2,
-        "max": 2
-      },
-      "review_requests": {
-        "median": 1,
-        "min": 1,
-        "max": 1
+      "same_session_followups": {
+        "status": "not_run_on_WSL",
+        "harness": "warm.py"
       }
     }
+  },
+  "corrections": [
+    "Initial wrapper/API mistakes retained as harness corrections.",
+    "Five initial WSL native source rows excluded for omitted retained-output retrieval; corrected native smoke and final paired guest repetitions passed without command rerun.",
+    "First guest warm controls filteredactivity-log after actual path labelactivity.log; failed controls retained, corrected label subsequently tested.",
+    "Final guest CM strict JSON15/18 is retained. Posthoc visible-field18/18 is a separate classification, no data inferred from oracle."
   ],
-  "native_source_recovery_smoke": {
-    "task": "source_lookup",
-    "route": "native-verbose",
-    "repetition": 1,
-    "exit_code": 0,
-    "wall_seconds": 0.2018144260000554,
-    "oracle_pass": true,
-    "final": {
-      "base_ms": 250,
-      "cap_ms": 8000,
-      "function": "compute_retry_delay",
-      "path": "src/module_31.py"
-    },
-    "model_requests": 3,
-    "review_requests": 1,
-    "title_requests": 1,
-    "tool_calls": 2,
-    "unique_tool_result_text_bytes": 16681,
-    "unique_tool_result_json_bytes": 18327,
-    "main_request_json_bytes": 129325,
-    "usage": {
-      "input_tokens": null,
-      "output_tokens": null
-    },
-    "observed_cost_usd": null,
-    "fixture_raw_output_bytes": 96070
-  },
-  "same_session_followups": {
-    "status": "not_run_on_WSL",
-    "harness": "warm.py"
-  }
+  "raw_evidence": "Synthetic raw evidence retained locally by test operator; not required to run the public scripts.",
+  "billed_tokens": null,
+  "observed_cost_usd": null
 }
