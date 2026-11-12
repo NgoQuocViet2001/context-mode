@@ -439,11 +439,12 @@ describe("GP11: v1 migration setup plants detectable footprints", { concurrency:
     zcode: [V1_REASON.zcodeHook],
   };
 
-  test("[M7] v1-migration-setup/own-agent-list-matches-AGENT_IDS", () => {
-    assert.deepEqual([...SETUP_AGENT_IDS].sort(), [...AGENT_IDS].sort());
+  test("[M7] v1-migration-setup/own-agent-list-is-the-10-historical-hosts", () => {
+    assert.deepEqual([...SETUP_AGENT_IDS].sort(), AGENT_IDS.filter((id) => id !== "fx").sort());
+    assert.equal(SETUP_AGENT_IDS.includes("fx"), false, "fx has no legacy install footprint");
   });
 
-  for (const agent of AGENT_IDS) {
+  for (const agent of SETUP_AGENT_IDS) {
     test(`[M7] v1-migration-setup/plants-detectable-v1-footprint/${agent}`, (t) => {
       const home = tmp(t, agent);
       assert.equal(scan(t, agent, home).length, 0, "fresh home has no v1 footprint");

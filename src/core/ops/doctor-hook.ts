@@ -5,6 +5,7 @@
 // the hook's own cost against HOOK_P95_MS. An agent with no recorded payload is UNKNOWN, never a guessed payload.
 // D-D5-BARE-1: the cost is hook wall minus bare `node -e ""` wall, the D3 rule (ADR-0019 D3), fastest of 3 to 9 pairs (D-D5-MORE-PAIRS-1).
 // node.exe start is paid by the host with or without the hook (42.7 ms p50 on windows-latest), so it is not in the budget.
+import { HOOK_LIMITATION } from "../../adapters/fx.ts";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -83,7 +84,7 @@ function loadFixture(bundleDir: string, agent: AgentId): FixtureEntry | { cause:
 
 // D-D5-ALL-AGENTS-1: the payload key that carries the project dir. OpenCode's plugin sends `directory` (adapters/opencode.ts decode).
 const CWD_KEY: Readonly<Record<AgentId, string>> = {
-  "claude-code": "cwd", codex: "cwd", gemini: "cwd", qwen: "cwd", "copilot-cli": "cwd", vscode: "cwd", kiro: "cwd", zcode: "cwd", pi: "cwd", opencode: "directory",
+  "claude-code": "cwd", codex: "cwd", gemini: "cwd", qwen: "cwd", "copilot-cli": "cwd", vscode: "cwd", kiro: "cwd", zcode: "cwd", pi: "cwd", opencode: "directory", fx: "cwd",
 };
 
 /** The fixture payload with the agent's cwd key set to the project worktree: a recorded /tmp/project is no repository and would log a hook error each run. */
@@ -277,6 +278,7 @@ export async function codexStopDetail(i: HookCheckInput, timeoutMs: number): Pro
 }
 
 export async function checkHookRoundTrip(i: HookCheckInput): Promise<DoctorRow> {
+  if (i.agent === "fx") return row("WARN", HOOK_LIMITATION);
   // D-NI-CODEX-TRUST-3: the native plugin route leaves no hooks.json, so the host is asked (hooks/list), as the terminal doctor does.
   // A hook Codex lists untrusted never runs, whatever hook.mjs answers here. No answer from Codex: no claim, the round trip decides.
   if (i.agent === "codex") {

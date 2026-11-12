@@ -613,7 +613,13 @@ describe("ADR-0019 cli", () => {
         }
         const d = run(s, ["doctor", "--agents", a.id, "--json"]);
         assert.equal(d.status, 0, d.stdout + d.stderr);
-        assert.equal(JSON.parse(d.stdout).agents.find((x) => x.id === a.id).status, "PASS");
+        const checked = JSON.parse(d.stdout).agents.find((x) => x.id === a.id);
+        assert.equal(checked.status, "PASS");
+        if (a.hookChannel.kind === "none") {
+          for (const name of ["hook-registered", "hook-runs", "hook-seen"]) {
+            assert.equal(checked.checks.find((c) => c.name === name).warn, true, `${a.id}: ${name}`);
+          }
+        }
       });
     }
 

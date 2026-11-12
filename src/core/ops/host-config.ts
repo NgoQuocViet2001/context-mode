@@ -234,12 +234,28 @@ export function tomlHeaderText(path: readonly string[]): string {
   return "[" + path.map(tomlHeaderKey).join(".") + "]";
 }
 
+// fx's native JSON parser rejects duplicate keys, whereas JSON.parse keeps the last.
+// Check the parsed scanner tree only for fx so an edited document cannot be a host-invalid false PASS.
+function assertUniqueKeys(node: Node): void {
+  if (node.kind === "object") {
+    const seen = new Set<string>();
+    for (const member of node.members) {
+      if (seen.has(member.key)) throw new SyntaxError("duplicate JSON key");
+      seen.add(member.key);
+      assertUniqueKeys(member.node);
+    }
+  } else if (node.kind === "array") for (const item of node.items) assertUniqueKeys(item);
+}
+
 // ------------------------------------------------------------------------------------------ parse API
 
 /** Parse a host config text; any syntax error is CONFIG_PARSE_FAILED (impl/07 §2 Errors). Empty text is {}. */
 export function parseHostConfig(agent: AgentId, path: string, text: string, format: HostConfigFormat): unknown {
   try {
-    return format === "toml" ? scanToml(text).value : scanJson(text, format).value;
+    if (format === "toml") return scanToml(text).value;
+    const doc = scanJson(text, format);
+    if (agent === "fx" && doc.root !== null) assertUniqueKeys(doc.root);
+    return doc.value;
   } catch {
     throw new CtxError("CONFIG_PARSE_FAILED", { agent, path, format });
   }
@@ -430,6 +446,31 @@ function setText(agent: AgentId, path: string, text: string, format: HostConfigF
   }
 }
 
+/** Existing fx settings that would prevent our configured stdio server from loading.
+ * Do not overwrite the user's disable/transport choice in order to report a successful install. */
+export function fxMcpEntryIssue(entry: unknown): string | undefined {
+  if (!isPlainObject(entry)) return undefined;
+  if (Object.hasOwn(entry, "enabled") && entry.enabled !== true) return "fx context-mode entry is disabled or has an invalid enabled value; enable it in mcp.json before setup";
+  if (Object.hasOwn(entry, "type") && entry.type !== "local" && entry.type !== "stdio") return "fx context-mode entry selects a different transport; keep it or remove that entry before configuring the stdio integration";
+  if (!Object.hasOwn(entry, "type") && Object.hasOwn(entry, "url")) return "fx context-mode entry has a URL without a type; correct or remove that entry before setup";
+  if (Object.hasOwn(entry, "env") && (!isPlainObject(entry.env) || Object.values(entry.env).some(v => typeof v !== "string"))) return "fx context-mode env must be an object of string values";
+  return undefined;
+}
+
+/** fx accepts exactly one profile MCP container: `mcp` or `mcpServers`.
+ * Keep the existing choice and reject ambiguous/invalid lists before any write. */
+export function ownMcpKey(agent: AgentId, parsed: unknown): readonly string[] {
+  const fallback = OWN_MCP_ENTRY[agent]?.key ?? [];
+  if (agent !== "fx") return fallback;
+  if (!isPlainObject(parsed)) throw new Error("fx mcp.json must contain an object");
+  const hasMcp = Object.hasOwn(parsed, "mcp");
+  const hasServers = Object.hasOwn(parsed, "mcpServers");
+  if (hasMcp && hasServers) throw new Error("fx mcp.json cannot contain both mcp and mcpServers");
+  const key = hasMcp ? "mcp" : "mcpServers";
+  if (Object.hasOwn(parsed, key) && !isPlainObject(parsed[key])) throw new Error("fx " + key + " must contain an object");
+  return [key, "context-mode"];
+}
+
 // ------------------------------------------------------------------------------------------ merge API
 
 interface OwnTarget { key: KeyPath; next(current: unknown): unknown; }
@@ -493,12 +534,14 @@ const swapField = (field: string, spec: string) => (x: unknown): unknown => (isP
 
 // D-M5-O1-4: the own entries a host config holds per agent. Hook entries ship in the release's hook files
 // (build/manifests.ts); this module regenerates the MCP entry and the plugin/package list entry.
-function ownTargets(agent: AgentId, accept: OwnAccept): OwnTarget[] {
+function ownTargets(agent: AgentId, accept: OwnAccept, parsed: unknown): OwnTarget[] {
   const mcp = OWN_MCP_ENTRY[agent];
   if (mcp !== undefined) {
     return [{
-      key: mcp.key,
+      key: ownMcpKey(agent, parsed),
       next(current) {
+        const issue = agent === "fx" ? fxMcpEntryIssue(current) : undefined;
+        if (issue !== undefined) throw new Error(issue);
         const keep = isPlainObject(current) ? current : {};
         const node = accept.nodePath === true && isNodeCommand(keep[MCP_COMMAND_FIELD]) ? keep[MCP_COMMAND_FIELD] : HOST_NODE_COMMAND;
         return { ...keep, ...ownMcpValue(agent, node, serverScript()) };
@@ -540,7 +583,7 @@ export function editHostConfigText(agent: AgentId, path: string, text: string, f
 /** impl/07 §2: regenerate only context-mode's own entries; every other key and user value is kept. */
 export function mergeOwnEntries(agent: AgentId, current: string, format: HostConfigFormat, row: AdapterRow, accept: OwnAccept = {}): HostConfigResult {
   const parsed = parseHostConfig(row.id, HOST_CONFIG_TEXT_PATH, current, format);
-  const wanted = ownTargets(agent, accept).map((t): [KeyPath, unknown] => [t.key, t.next(hostConfigValueAt(parsed, t.key))]);
+  const wanted = ownTargets(agent, accept, parsed).map((t): [KeyPath, unknown] => [t.key, t.next(hostConfigValueAt(parsed, t.key))]);
   return applyEdits(agent, HOST_CONFIG_TEXT_PATH, current, format, wanted);
 }
 
@@ -551,6 +594,6 @@ export function writeHostConfigEdit(_requested: string, current: HostConfigText,
   const wanted = Object.entries(patch).map(([k, v]): [KeyPath, unknown] => [[k], v]);
   const result = applyEdits(current.agent, current.path, current.text, current.format, wanted);
   if (result.edits.length === 0) return [];
-  atomicWriteFile(current.path, current.layout === undefined ? result.text : withLayout(result.text, current.layout));
+  atomicWriteFile(current.path, current.layout === undefined ? result.text : withLayout(result.text, current.layout), current.agent === "fx" ? { fileMode: 0o600, dirMode: 0o700 } : {});
   return result.edits;
 }

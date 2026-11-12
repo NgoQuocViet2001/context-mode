@@ -2,6 +2,7 @@
 // Area: ADR-0019 (interactive setup, npm channel), ADR-0023, PRD-setup.
 // One file per ADR area (ADR-0024). A new setup test goes into the describe block of its section.
 import { describe, test } from "node:test";
+import "./_lib/fx-host.mjs";
 import { CONC } from "./_lib/concurrency.mjs";
 import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";

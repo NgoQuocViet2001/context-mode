@@ -1,7 +1,7 @@
 // impl/07 §6 step 5 (config regeneration), §2 (readHostConfig, mergeOwnEntries, #849 .jsonc pick);
 // DEVIATIONS D-M5-O1-3, D-M5-O1-4, D-M5-U1-6, D-M5-U5-1. One write path: copy the original to
 // <file>UPGRADE_TRASH_SUFFIX, write <file>.tmp, rename over <file>; any failure puts the original back.
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   AGENT_HOME_DIR, HOST_CONFIG_TMP_SUFFIX, OPENCODE_BASE_CONFIG_FILE, OWN_MCP_ENTRY,
@@ -51,10 +51,11 @@ function writeWithRollback(file: string, text: string, write: HostFileWriter, at
   const trash = file + UPGRADE_TRASH_SUFFIX;
   const tmp = `${file}${HOST_CONFIG_TMP_SUFFIX}.${process.pid}`; // per process: two runs do not share a tmp file
   const had = existsSync(file);
-  mkdirSync(dirname(file), { recursive: true });
+  mkdirSync(dirname(file), { recursive: true, ...(atomic.dirMode === undefined ? {} : { mode: atomic.dirMode }) });
   if (had) copyFileSync(file, trash);
   try {
     write(tmp, text);
+    if (atomic.fileMode !== undefined) chmodSync(tmp, atomic.fileMode);
     renameWithRetry(tmp, file, atomic);
   } catch (err) {
     removeTmpFile(tmp, atomic);
@@ -81,6 +82,7 @@ export function regenerateHostConfig(row: AdapterRow, home: string, opts: HostWr
   const exists = existsSync(current.path);
   if (exists && result.text === current.text) return [];
   const text = result.text === "" && current.format !== "toml" ? JSON.stringify({}) : result.text;
-  writeWithRollback(current.path, current.layout === undefined ? text : withLayout(text, current.layout), opts.write ?? defaultWrite, opts.atomic ?? {});
+  const write = opts.write ?? (row.id === "fx" ? ((file: string, body: string) => writeFileSync(file, body, { mode: 0o600 })) : defaultWrite);
+  writeWithRollback(current.path, current.layout === undefined ? text : withLayout(text, current.layout), write, row.id === "fx" ? { ...opts.atomic, fileMode: 0o600, dirMode: 0o700 } : opts.atomic ?? {});
   return result.edits.map((e) => toRow(current.path, e));
 }

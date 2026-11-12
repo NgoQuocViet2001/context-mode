@@ -1,7 +1,7 @@
 {
   "name": "context-mode",
   "version": "2.1.8",
-  "description": "Context window saver for 10 coding agents. Local and free: sandboxed code execution, FTS5 search, session continuity.",
+  "description": "Context window saver for 11 coding agents. Local and free: sandboxed code execution, FTS5 search, session continuity on supported hosts.",
   "author": {
     "name": "Mert Koseoglu",
     "url": "https://github.com/mksglu"
@@ -20,6 +20,7 @@
     "pi",
     "kiro",
     "zcode",
+    "fx",
     "mcp",
     "context-window",
     "sandbox",

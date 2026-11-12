@@ -1547,9 +1547,9 @@ describe("ADR-0010 doctor D5: hook round trip", { concurrency: CONC }, () => {
     assert.ok(r.detail.startsWith(C.D5_NO_FIXTURE_DETAIL("gemini") + ": "), r.detail); // D-DOCTOR-ISSUE-1: names the agents the file records
   });
 
-  // D-D5-ALL-AGENTS-1 (owner: every agent has 100% hooks): each agent's recorded payload gives PASS or FAIL, never UNKNOWN.
+  // D-D5-ALL-AGENTS-1: each hook-capable agent's recorded payload gives PASS or FAIL, never UNKNOWN.
   const SHIPPED = JSON.parse(readFileSync(path.resolve(import.meta.dirname, "..", "e2e", "fixtures", "hook-roundtrip.json"), "utf8"));
-  for (const { id } of ADAPTERS) {
+  for (const { id } of ADAPTERS.filter((r) => r.hookChannel.kind !== "none")) {
     test(`[M5] doctor-hook/D5-${id}-has-a-recorded-payload-and-PASSes (D-D5-ALL-AGENTS-1)`, async (t) => {
       assert.ok(Object.hasOwn(SHIPPED, id), id + " has no recorded payload in e2e/fixtures/hook-roundtrip.json");
       const decoded = getAdapter(id).decode(SHIPPED[id].payload);
@@ -1740,8 +1740,8 @@ describe("ADR-0010 doctor D5: hook round trip", { concurrency: CONC }, () => {
     }
 
     test("every shipped fixture has the key set of the recorded native PreToolUse payload", () => {
-      // D-D5-ALL-AGENTS-1: every agent has hooks, so every agent has a recorded payload; claude-code and codex have host recordings.
-      assert.deepEqual(Object.keys(fixtures).sort(), ADAPTERS.map((r) => r.id).sort());
+      // D-D5-ALL-AGENTS-1: every hook-capable agent has a recorded payload; claude-code and codex have host recordings.
+      assert.deepEqual(Object.keys(fixtures).sort(), ADAPTERS.filter((r) => r.hookChannel.kind !== "none").map((r) => r.id).sort());
       for (const host of ["claude-code", "codex"]) {
         const entry = fixtures[host];
         assert.equal(entry.payload.hook_event_name, "PreToolUse", host);
@@ -2585,11 +2585,11 @@ describe("ADR-0010 doctor: hook-runs check per agent (GP11)", { concurrency: CON
     return { home, env, reg: buildRegistry({ home, pkgDir, env }) };
   }
 
-  test("H5: doctor hook-runs PASSES on all 10 hosts with the real hook: the large shell read gets the saving effect", (t) => {
+  test("H5: doctor hook-runs PASSES on all 10 hook-capable hosts with the real hook: the large shell read gets the saving effect", (t) => {
     const s = sandbox(t, REAL_HOOK);
     assert.equal(s.reg.length, ADAPTERS.length);
-    assert.equal(s.reg.length, 10);
-    for (const row of s.reg) {
+    assert.equal(s.reg.length, 11);
+    for (const row of s.reg.filter((r) => r.hookInstall.kind !== "none")) {
       const c = hookRunsCheck(row, s.env);
       assert.equal(c.name, "hook-runs", row.id);
       assert.equal(c.ok, true, row.id + ": " + c.detail);
@@ -2598,18 +2598,18 @@ describe("ADR-0010 doctor: hook-runs check per agent (GP11)", { concurrency: CON
     assert.equal(existsSync(path.join(s.home, ".context-mode")), false, "doctor wrote into HOME/.context-mode");
   });
 
-  test("H5: doctor hook-runs FAILS on every host when the hook answers nothing (no saving decision)", (t) => {
+  test("H5: doctor hook-runs FAILS on every hook-capable host when the hook answers nothing (no saving decision)", (t) => {
     const s = sandbox(t, SILENT_HOOK);
-    for (const row of s.reg) {
+    for (const row of s.reg.filter((r) => r.hookInstall.kind !== "none")) {
       const c = hookRunsCheck(row, s.env);
       assert.equal(c.ok, false, row.id + " a silent hook is a false PASS");
       assert.ok(c.detail.includes("no saving decision"), row.id + ": " + c.detail);
     }
   });
 
-  test("H5: doctor hook-runs FAILS on every host when the hook cannot resolve the project (NO_PROJECT)", (t) => {
+  test("H5: doctor hook-runs FAILS on every hook-capable host when the hook cannot resolve the project (NO_PROJECT)", (t) => {
     const s = sandbox(t, NO_PROJECT_HOOK);
-    for (const row of s.reg) {
+    for (const row of s.reg.filter((r) => r.hookInstall.kind !== "none")) {
       const c = hookRunsCheck(row, s.env);
       assert.equal(c.ok, false, row.id + " a NO_PROJECT hook is a false PASS");
       assert.ok(c.detail.includes("NO_PROJECT"), row.id + ": " + c.detail);

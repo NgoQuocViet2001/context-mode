@@ -24,7 +24,7 @@
     "bugs": {
       "url": "https://github.com/mksglu/context-mode/issues"
     },
-    "description": "Context window saver for 10 coding agents. Local and free: sandboxed code execution, FTS5 search, session continuity.",
+    "description": "Context window saver for 11 coding agents. Local and free: sandboxed code execution, FTS5 search, session continuity on supported hosts.",
     "engines": {
       "node": ">=24.15.0"
     },
@@ -66,6 +66,7 @@
       "pi",
       "kiro",
       "zcode",
+      "fx",
       "mcp",
       "context-window",
       "sandbox",

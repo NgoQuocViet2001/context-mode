@@ -185,8 +185,15 @@ export function vscodeUserDirOf(env: NodeJS.ProcessEnv, home: string, platform: 
  *  <home>, except VS Code, whose file name sits in the user-profile dir. The one place setup, doctor, upgrade, uninstall
  *  and plugin-root get this path. */
 export function ownMcpFileOf(agent: string, file: readonly string[], env: NodeJS.ProcessEnv, home: string): string {
+  if (agent === "fx") return join(fxDirOf(env, home), ...file.slice(1));
   if (agent === "kiro") return join(kiroDirOf(env, home), ...file.slice(1)); // D-WIN-KIRO-HOME-1: file = [".kiro", ...]
   return agent === "vscode" ? join(vscodeUserDirOf(env, home), ...file) : join(home, ...file);
+}
+
+/** Published fx 0.0.16 reads ~/.fx and ignores FX_HOME. Newer development source
+ * adds FX_HOME; do not infer that unreleased contract for the supported binary. */
+export function fxDirOf(_env: NodeJS.ProcessEnv, home: string): string {
+  return join(home, ...AGENT_HOME_DIR.fx);
 }
 
 /** The one "home or fail" helper (D-WIN-HOME-3): setup, doctor, upgrade, uninstall, plugin-root and the store all call this.

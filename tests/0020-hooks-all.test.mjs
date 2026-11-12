@@ -146,7 +146,7 @@ createInterface({ input: process.stdin }).on("line", (l) => {
       const kinds = printPlan(row).steps.map((s) => s.kind);
       assert.ok(row.hookInstall, row.id + " hookInstall");
       assert.ok(row.skillInstall, row.id + " skillInstall");
-      if (getAdapter(row.id).hookChannel.kind !== "package") assert.ok(kinds.includes("hook") || kinds.includes("run"), row.id + " hook step");
+      if (!["package", "none"].includes(getAdapter(row.id).hookChannel.kind)) assert.ok(kinds.includes("hook") || kinds.includes("run"), row.id + " hook step");
       if (getAdapter(row.id).skillChannel.kind === "home-dir") assert.ok(kinds.includes("skill"), row.id + " skill step");
     }
   });

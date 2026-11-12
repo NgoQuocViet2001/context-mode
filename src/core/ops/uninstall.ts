@@ -16,7 +16,7 @@ import type { AdapterRow, AgentId, ProjectContext, UpgradeChangeRow } from "../c
 import { isInside } from "../project/contain.ts";
 import { claudeDirOf, opencodeDirOf, ownMcpFileOf, piAgentDirOf, requireHomeDir, resolveConfigDir } from "../project/config-dir.ts";
 import { listLiveOwners } from "../store/owners.ts";
-import { hostConfigValueAt, parseHostConfig, readHostConfig, writeHostConfigEdit } from "./host-config.ts";
+import { ownMcpKey, hostConfigValueAt, parseHostConfig, readHostConfig, writeHostConfigEdit } from "./host-config.ts";
 import { resolvePluginRoot } from "./plugin-root.ts";
 
 export interface UninstallInput {
@@ -116,9 +116,14 @@ function ownEntries(agent: AgentId, env: NodeJS.ProcessEnv): OwnEntry[] {
   const mcp = OWN_MCP_ENTRY[agent];
   if (mcp !== undefined) {
     // The own entry sits at key = [top, ...inner, own] (zcode: mcp.servers.context-mode, D-HF-ZCODE-SHAPE-1).
-    const top = mcp.key[0];
-    const inner = mcp.key.slice(1, -1);
-    const own = mcp.key[mcp.key.length - 1];
+    const file = ownMcpFileOf(agent, mcp.file, env, home);
+    const key = agent === "fx" ? (() => {
+      const current = readHostConfig(agent, file);
+      return ownMcpKey(agent, parseHostConfig(agent, file, current.text, current.format));
+    })() : mcp.key;
+    const top = key[0];
+    const inner = key.slice(1, -1);
+    const own = key[key.length - 1];
     const holder = (v: unknown): unknown => inner.reduce<unknown>((cur, k) => (isObj(cur) ? cur[k] : undefined), v);
     const without = (v: unknown, path: readonly string[]): unknown => {
       const o = v as Record<string, unknown>;
@@ -126,9 +131,9 @@ function ownEntries(agent: AgentId, env: NodeJS.ProcessEnv): OwnEntry[] {
       return { ...o, [path[0]]: without(o[path[0]], path.slice(1)) };
     };
     return [{
-      file: ownMcpFileOf(agent, mcp.file, env, home),
+      file,
       key: top,
-      shown: mcp.key.join(V1_KEY_PATH_SEP),
+      shown: key.join(V1_KEY_PATH_SEP),
       has: (v) => { const h = holder(v); return isObj(h) && Object.hasOwn(h, own); },
       drop: (v) => without(v, inner),
     }];

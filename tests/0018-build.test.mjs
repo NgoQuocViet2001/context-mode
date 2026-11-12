@@ -712,6 +712,7 @@ describe("ADR-0019 build: host skills", () => {
     zcode: "mcp__context-mode__ctx_stats",
     pi: "ctx_stats",
     opencode: "ctx_stats",
+    fx: "mcp_context-mode_ctx_stats",
   };
 
   test("[D-N5-SKILL-1] the built package's ctx-stats skill names each host's real tool once, never a doubled prefix", () => {

@@ -7,7 +7,7 @@ import path from "node:path";
 import { ADAPTERS, getAdapter } from "../adapters/table.ts";
 import { AGENT_HOME_DIR, PLUGIN_MARKETPLACE_NAME, HOST_NODE_COMMAND, HOST_PLUGINS_DIR_NAME, INSTALLED_PLUGINS_FILE, MCP_ENV_FIELD, OPENCODE_BASE_CONFIG_FILE, OWN_MCP_ENTRY, SERVER_KEY, SETUP_BACKUP_DIR_NAME, TOOL_ORDER } from "../core/contracts/constants.ts";
 import type { AgentId, AdapterRow, HostConfigFormat } from "../core/contracts/types.ts";
-import { claudeDirOf, claudeProfileEnv, copilotDirOf, geminiDirOf, kiroDirOf, opencodeDirOf, ownMcpFileOf } from "../core/project/config-dir.ts";
+import { fxDirOf, claudeDirOf, claudeProfileEnv, copilotDirOf, geminiDirOf, kiroDirOf, opencodeDirOf, ownMcpFileOf } from "../core/project/config-dir.ts";
 import { ownMcpValue } from "../core/ops/host-config.ts";
 import { HOOK_SHAPES, type JsonObject } from "./hook-shapes.ts";
 
@@ -48,7 +48,8 @@ export interface HookFile { file: string; mode: "rewrite" | "drop"; }
 export type HookInstall =
   | { kind: "file"; file: string; shape: JsonObject; command: string; trust?: string }
   | { kind: "plugin-list"; file: string; key: readonly string[]; entry: string; worktree: string }
-  | { kind: "package"; via: string };
+  | { kind: "package"; via: string }
+  | { kind: "none" };
 
 /** ADR-0020: the one skill channel. dir = setup writes <dir>/<name>/SKILL.md rendered with the agent's tool name
  *  prefix from the package's skills/; package = the installed package ships skills/ itself. */
@@ -69,6 +70,7 @@ const OPENCODE_HOME_SEGS = AGENT_HOME_DIR.opencode;
  *  from $CODEX_HOME (default ~/.codex), so a ".codex/..." path moves under CODEX_HOME when it is set. */
 function agentPath(ctx: SetupContext, id: AgentId, rel: string | readonly string[]): string {
   const segs = typeof rel === "string" ? rel.split("/") : [...rel];
+  if (id === "fx" && segs[0] === ".fx") return path.join(fxDirOf(ctx.env, ctx.home), ...segs.slice(1));
   const codexHome = ctx.env[CODEX_HOME_ENV];
   if (id === "codex" && segs[0] === CODEX_DIR && codexHome !== undefined && codexHome !== "") return path.join(codexHome, ...segs.slice(1));
   // D-WIN-COPILOT-HOME-1: Copilot CLI only; VS Code's hook file also sits under .copilot/ but VS Code does not read COPILOT_HOME.
@@ -279,6 +281,7 @@ function hookFilesFor(ctx: SetupContext, id: AgentId): HookFile[] {
 
 function hookInstallFor(ctx: SetupContext, row: AdapterRow, command: string): HookInstall {
   const ch = row.hookChannel;
+  if (ch.kind === "none") return { kind: "none" };
   if (ch.kind === "home-file") {
     const shape = HOOK_SHAPES[row.id];
     if (!shape) throw new Error(`setup: ${row.id} has a home-file hook channel and no hook shape`);
@@ -330,7 +333,7 @@ export function buildRegistry(ctx: SetupContext): CheckRow[] {
     const writes = [
       ...(copilotSettings ? [copilotSettings] : []),
       ...(config ? [config.file] : []), ...hookFiles.map((h) => h.file),
-      ...(hookInstall.kind === "package" ? [] : [hookInstall.file]),
+      ...(hookInstall.kind === "package" || hookInstall.kind === "none" ? [] : [hookInstall.file]),
       ...(hookInstall.kind === "file" && hookInstall.trust ? [hookInstall.trust] : []),
       ...(skillInstall.kind === "dir" ? skillInstall.files.map((f) => f.file) : []),
     ];
@@ -341,7 +344,7 @@ export function buildRegistry(ctx: SetupContext): CheckRow[] {
       goldenPayload: golden(row, ctx.home),
     };
     if (copilotSettings) out.copilotSettings = copilotSettings;
-    if (row.installMode !== "in-process") out.hookCommand = hookCommand;
+    if (row.installMode !== "in-process" && row.hookChannel.kind !== "none") out.hookCommand = hookCommand;
     const copy = copyFor(ctx, id);
     if (copy) out.copy = copy;
     const native = NATIVE_PLUGIN[id];

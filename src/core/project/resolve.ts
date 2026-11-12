@@ -39,6 +39,7 @@ function sourceOf(agent: AgentId): ProjectSourceKind {
     case "qwen":
     case "zcode":
     case "opencode":
+    case "fx":
       return "spawn-cwd";
     case "pi":
       return "pi:ctx.cwd";

@@ -43,6 +43,7 @@ export function hookSample(id: AgentId, cwd: string, text: string): HookSample {
   const tool = row.nativeTools.shell[0];
   const command = { command: SAMPLE_COMMAND };
   switch (id) {
+    case "fx": throw new Error("fx has no external command-hook channel");
     case "claude-code":
       return { effect, payload: { hook_event_name: event, session_id: SAMPLE_SESSION, cwd, tool_name: tool, tool_input: command, tool_response: { stdout: text, stderr: "" } } };
     case "gemini":

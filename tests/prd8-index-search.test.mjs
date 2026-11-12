@@ -2773,10 +2773,10 @@ describe("PRD-v2 section 8: stage 1 (concurrent)", { concurrency: CONC }, () => 
 
   // Moved from tests/e2e/fetch-index-search-parity.test.mjs
   // Serial inside the concurrent stage: the summary tests read the Map the per-host tests fill, in order.
-  describe("PRD-v2 section 8 / fetch, index, search parity on 10 hosts", { concurrency: 1 }, () => {
+  describe("PRD-v2 section 8 / fetch, index, search parity on 11 hosts", { concurrency: 1 }, () => {
     // Owner scenario (Pi session 2026-10-30): "Fetch the React useEffect docs, index them, and find the cleanup pattern
-    // with code examples." For all 10 hosts: ctx_index {url} then ctx_search {queries}, each the way the host runs it.
-    //   MCP hosts (claude-code, codex, gemini, qwen, copilot-cli, vscode, kiro, zcode): the built server.mjs --agent <host>
+    // with code examples." For all 11 hosts: ctx_index {url} then ctx_search {queries}, each the way the host runs it.
+    //   MCP hosts (claude-code, codex, gemini, qwen, copilot-cli, vscode, kiro, zcode, fx): the built server.mjs --agent <host>
     //     over stdio JSON-RPC (vscode also gets --workspace-folder, as setup writes it).
     //   pi: src/entries/pi.ts in process, with the documented ctx object ({cwd, sessionManager}) from before_agent_start.
     //   opencode: src/entries/opencode.ts in process, with the documented app object ({directory, tool}).
@@ -2802,7 +2802,7 @@ describe("PRD-v2 section 8: stage 1 (concurrent)", { concurrency: CONC }, () => 
     const HOST = "docs.parity.test";
     const QUERY = "useEffect cleanup function return pattern";
     const OUTPUT_CAP = 16384; // src/core/contracts/constants.ts OUTPUT_CAP: the one bound for every reply
-    const MCP_HOSTS = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode"];
+    const MCP_HOSTS = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "fx"];
     const ALL_HOSTS = [...MCP_HOSTS, "pi", "opencode"];
 
     let root, pkg, srv, url, probeUrl;
@@ -2939,7 +2939,7 @@ describe("PRD-v2 section 8: stage 1 (concurrent)", { concurrency: CONC }, () => 
         assert.ok(hitIds(search.text).length > 0, `${host}: no hit line in:\n${search.text.slice(0, 600)}`);
         results.set(host, { indexText: idx.text, searchText: search.text });
     });
-    // The eight MCP hosts are child processes with their own HOME in env: they run concurrently. Pi and opencode run in this
+    // The nine MCP hosts are child processes with their own HOME in env: they run concurrently. Pi and opencode run in this
     // process and set process.env.HOME, so they stay serial after the MCP block.
     describe("PRD-v2 section 8 / parity: MCP hosts (concurrent)", { concurrency: CONC }, () => {
       for (const host of MCP_HOSTS) hostCase(host);
@@ -2956,7 +2956,7 @@ describe("PRD-v2 section 8: stage 1 (concurrent)", { concurrency: CONC }, () => 
       assert.equal(out[1].text, results.get("claude-code").searchText);
     });
 
-    test("[parity] all 10 hosts: same chunk count, same hit list, same reply bytes, reply under OUTPUT_CAP", () => {
+    test("[parity] all 11 hosts: same chunk count, same hit list, same reply bytes, reply under OUTPUT_CAP", () => {
       assert.equal(results.size, ALL_HOSTS.length, "every host ran: " + [...results.keys()].join(","));
       const ref = results.get("claude-code");
       const table = ALL_HOSTS.map((h) => `${h}: chunks=${chunksOf(results.get(h).indexText)} bytes=${bytes(results.get(h).searchText)} hits=${hitIds(results.get(h).searchText).length}`);

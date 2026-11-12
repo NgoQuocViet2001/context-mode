@@ -32,9 +32,9 @@ describe("ADR-0018: contracts (concurrent)", { concurrency: CONC }, () => {
 
     const SRC = join(dirname(fileURLToPath(import.meta.url)), "../src/core/contracts");
 
-    test("AGENT_IDS has the 10 agents in PRD §3 order", () => {
-      assert.deepEqual([...AGENT_IDS], ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode"]);
-      assert.equal(AGENT_IDS.length, 10);
+    test("AGENT_IDS preserves the original 10 agents in PRD order and appends fx", () => {
+      assert.deepEqual([...AGENT_IDS], ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "fx"]);
+      assert.equal(AGENT_IDS.length, 11);
     });
 
     test("TOOL_ORDER has the 9 tool names in order", () => {
@@ -549,7 +549,7 @@ describe("ADR-0018: contracts (concurrent)", { concurrency: CONC }, () => {
       for (const row of ADAPTERS) {
         const spec = HOOK_HOST_FILE[row.id];
         const ch = row.hookChannel;
-        if (ch.kind === "in-process") { assert.equal(spec, null, `${row.id}: in-process agent has no hook file`); continue; }
+        if (ch.kind === "in-process" || ch.kind === "none") { assert.equal(spec, null, `${row.id}: ${ch.kind} agent has no hook file`); continue; }
         assert.ok(spec !== null, `${row.id}: hook file row missing`);
         assert.equal(spec.root, kinds[ch.kind], `${row.id}: root ${spec.root} vs channel ${ch.kind}`);
         assert.equal(path.join(...spec.file), path.join(...ch.path.split(POSIX_SEP)), `${row.id}: doctor and setup name different hook files`);

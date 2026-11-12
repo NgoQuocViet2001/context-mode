@@ -75,7 +75,7 @@ export interface ToolDef<I> { name: string; description: string; schema: import(
 
 // ADR-0020: "package" = file inside the installed package dir; "home-file"/"home-dir" = path under HOME;
 // "in-process" = plugin entry the host loads from the package dir.
-export interface HookChannel { kind: "package" | "home-file" | "in-process"; path: string; }
+export interface HookChannel { kind: "package" | "home-file" | "in-process" | "none"; path: string; }
 export interface SkillChannel { kind: "package" | "home-dir"; path: string; }
 
 export interface AdapterRow {

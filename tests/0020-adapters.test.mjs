@@ -18,6 +18,7 @@ import * as kiro from "../src/adapters/kiro.ts";
 import * as zcode from "../src/adapters/zcode.ts";
 import * as pi from "../src/adapters/pi.ts";
 import * as opencode from "../src/adapters/opencode.ts";
+import * as fx from "../src/adapters/fx.ts";
 import { CLIENT_NAME_TO_PLATFORM } from "../src/core/contracts/client-map.ts";
 import { HOST_SHAPES, replyErrors, shapeErrors } from "../src/core/ops/hook-shape.ts";
 import { spawnSync } from "node:child_process";
@@ -55,12 +56,14 @@ describe("ADR-0020 adapters", () => {
       zcode: ["hooks+mcp", "spawn-cwd", "mcp__context-mode__", "sessionstart", "none", 5000, "deny-reason"],
       pi: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", 0, "deny-reason"],
       opencode: ["in-process", "spawn-cwd", "", "opencode-cache", "none", 0, "deny-reason"],
+      fx: ["mcp-entry", "spawn-cwd", "mcp_context-mode_", "none", "none", 5000, "hint-only"],
     };
 
     const CLAUDE_NATIVE = { shell: ["Bash"], read: ["Read"], grep: ["Grep"], webfetch: ["WebFetch"], edit: ["Write", "Edit", "NotebookEdit"] };
     // impl/10 §1.3a; zcode = Claude names per DECISIONS-r9 R4 and impl/00 §3.1 (DEVIATIONS D-M3-A7-1).
     // #1212: Claude Code's PowerShell tool (tool_name "PowerShell", input {command}) is a shell tool too (D-CC-PWSH-1).
     const NATIVE = {
+      fx: { shell: ["bash"], read: ["read_file"], grep: ["grep_files"] },
       "claude-code": { ...CLAUDE_NATIVE, shell: ["Bash", "PowerShell"] },
       codex: { shell: ["Bash"], edit: ["apply_patch"] },
       gemini: { shell: ["run_shell_command"], read: ["read_file"], grep: ["grep_search"], webfetch: ["web_fetch"] }, // gemini-cli 0.65.0 *_TOOL_NAME
@@ -76,6 +79,7 @@ describe("ADR-0020 adapters", () => {
     const CLAUDE_EVENTS = { SessionStart: "SessionStart", UserPromptSubmit: "UserPromptSubmit", PreToolUse: "PreToolUse", PostToolUse: "PostToolUse" };
     // impl/10 §1.4; vscode PreCompact per DEVIATIONS D-M3-A4-1.
     const EVENTS = {
+      fx: {},
       "claude-code": CLAUDE_EVENTS,
       codex: CLAUDE_EVENTS,
       gemini: { UserPromptSubmit: "BeforeAgent", PreToolUse: "BeforeTool", PostToolUse: "AfterTool", PreCompact: "PreCompress" },
@@ -89,7 +93,7 @@ describe("ADR-0020 adapters", () => {
       opencode: { SessionStart: "context", UserPromptSubmit: "prompt", PreToolUse: "execute.before", PostToolUse: "execute.after", PreCompact: "compaction", Usage: "step-finish" },
     };
 
-    const MODULES = { "claude-code": claudeCode, codex, gemini, qwen, "copilot-cli": copilotCli, vscode, kiro, zcode, pi, opencode };
+    const MODULES = { "claude-code": claudeCode, codex, gemini, qwen, "copilot-cli": copilotCli, vscode, kiro, zcode, pi, opencode, fx };
 
     test("ADAPTERS has one row per AgentId, in AGENT_IDS order (impl/10 §1.2, §1.3)", () => {
       assert.deepEqual(ADAPTERS.map((r) => r.id), [...AGENT_IDS]);
@@ -124,7 +128,7 @@ describe("ADR-0020 adapters", () => {
       for (const [id, mod] of Object.entries(MODULES)) assert.equal(getAdapter(id).toolNamePrefix, mod.TOOL_NAME_PREFIX, id);
     });
 
-    test("all 10 adapters are wired to their own decode/encode (no not-built stub)", () => {
+    test("all 11 adapters are wired to their own decode/encode (no not-built stub)", () => {
       for (const [id, mod] of Object.entries(MODULES)) {
         const r = getAdapter(id);
         assert.equal(r.decode, mod.decode, id + " decode");
@@ -226,6 +230,7 @@ describe("ADR-0020 adapters", () => {
 
     // ADR-0020: every row names its one hook channel and its one skill channel. Expected values copied from the ADR table.
     const HOOK_CHANNEL = {
+      fx: { kind: "none", path: "" },
       "claude-code": { kind: "package", path: "hooks/claude-code.json" },
       codex: { kind: "home-file", path: ".codex/hooks.json" },
       gemini: { kind: "package", path: "hooks/hooks.json" },
@@ -238,6 +243,7 @@ describe("ADR-0020 adapters", () => {
       opencode: { kind: "in-process", path: "opencode/plugin.js" },
     };
     const SKILL_CHANNEL = {
+      fx: { kind: "home-dir", path: ".fx/skills" },
       "claude-code": { kind: "package", path: "skills" }, // D-R33-CC-SKILLS-1: shared with gemini and qwen
       codex: { kind: "home-dir", path: ".codex/skills" },
       gemini: { kind: "package", path: "skills" },
@@ -250,10 +256,11 @@ describe("ADR-0020 adapters", () => {
       opencode: { kind: "home-dir", path: ".config/opencode/skills" },
     };
 
-    test("every row has a hookChannel and a skillChannel with a non-empty path (ADR-0020, no exception rows)", () => {
+    test("every row declares its hook capability and a skillChannel with a non-empty path", () => {
       for (const id of AGENT_IDS) {
         const r = getAdapter(id);
-        assert.ok(r.hookChannel && typeof r.hookChannel.path === "string" && r.hookChannel.path.length > 0, id + " hookChannel");
+        assert.equal(r.hookChannel.kind === "none", id === "fx", id + " hook capability");
+        assert.equal(r.hookChannel.path.length > 0, id !== "fx", id + " hook path");
         assert.ok(r.skillChannel && typeof r.skillChannel.path === "string" && r.skillChannel.path.length > 0, id + " skillChannel");
         assert.deepEqual(r.hookChannel, HOOK_CHANNEL[id], id + " hookChannel");
         assert.deepEqual(r.skillChannel, SKILL_CHANNEL[id], id + " skillChannel");
@@ -305,6 +312,7 @@ describe("ADR-0020 adapters", () => {
         zcode: ["hooks+mcp", "spawn-cwd", "mcp__context-mode__", "sessionstart", "none", "deny-reason"],
         pi: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", "deny-reason"],
         opencode: ["in-process", "spawn-cwd", "", "opencode-cache", "none", "deny-reason"],
+        fx: ["mcp-entry", "spawn-cwd", "mcp_context-mode_", "none", "none", "hint-only"],
       };
       for (const r of ADAPTERS) {
         assert.deepEqual(
@@ -1980,14 +1988,14 @@ describe("ADR-0020 adapters", () => {
       { kind: "deny", reason: "why", rewritten: "node /x/run.mjs" }, { kind: "replace", output: "x" },
     ];
 
-    test("every agent has a host-schemas file with a reply schema for each of the four events", () => {
-      for (const id of AGENT_IDS) {
+    test("every hook-capable agent has a host-schemas file with a reply schema for each of the four events", () => {
+      for (const { id } of ADAPTERS.filter((r) => r.hookChannel.kind !== "none")) {
         for (const event of Object.keys(events)) assert.ok(HOST_SHAPES[id].output[event] !== undefined, `${id} ${event}`);
       }
     });
 
-    test("every encode reply of every agent is empty or valid for its host's reply schema", () => {
-      for (const id of AGENT_IDS) {
+    test("every encode reply of every hook-capable agent is empty or valid for its host's reply schema", () => {
+      for (const { id } of ADAPTERS.filter((r) => r.hookChannel.kind !== "none")) {
         for (const [event, ev] of Object.entries(events)) {
           for (const d of decisions) {
             if (d.kind === "deny" && event !== "PreToolUse") continue; // deny is a PreToolUse decision only (policy/decide.ts, dispatch caseB)

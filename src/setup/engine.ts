@@ -1,6 +1,7 @@
 // src/setup/engine.ts
 // ADR-0019 section 3 steps: preflight, detect, plan, apply, verify, rollback per agent, summary. No UI here.
 // Owner decisions D3 (hook overhead budget) and D4 (v1 forms replaced by the absolute form).
+import { HOOK_LIMITATION } from "../adapters/fx.ts";
 import { geminiSettingsGate } from "./gemini-gate.ts";
 import { zcodeConfigGate } from "./zcode-gate.ts";
 import { piSettingsGate } from "./pi-gate.ts";
@@ -14,7 +15,7 @@ import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, 
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { claudeDirOf, codexDirOf, copilotDirOf, dataRootOf, geminiDirOf, kiroDirOf, opencodeDirOf } from "../core/project/config-dir.ts";
+import { fxDirOf, claudeDirOf, codexDirOf, copilotDirOf, dataRootOf, geminiDirOf, kiroDirOf, opencodeDirOf } from "../core/project/config-dir.ts";
 import { AGENT_HOME_DIR, D2_NODE_DETAIL, D2_NODE_FIX, D2_SQLITE_DETAIL, D2_SQLITE_FIX, DB_FILE_NAME, MCP_ENV_FIELD, MCP_ENV_VARS_FIELD, MCP_TOOLS_FIELD, SETUP_MANIFEST_FILE, NATIVE_INSTALL, OPENCODE_CONFIG_FILES, OPENCODE_PLUGIN_KEY, OPENCODE_PLUGINS_KEY, OPENCODE_PLUGIN_PATH, PROJECTS_DIR_NAME, SERVER_KEY, TOOL_ORDER, UPGRADE_REPORT_ONLY_REASONS } from "../core/contracts/constants.ts";
 import { CtxError, formatError } from "../core/contracts/errors.ts";
 import { nodeTooOld } from "../core/hooks/fallback.ts";
@@ -23,7 +24,7 @@ import type { AgentId, HostConfigFormat, V1Finding } from "../core/contracts/typ
 import { detectV1 } from "../core/ops/detect-v1.ts";
 import { isNativeOpencodeEntry, OPENCODE_PACKAGE_DIR_HINT, opencodeDirPlugin, opencodeDirPlugins, opencodePluginDirs, opencodeProjectDir } from "../core/ops/doctor-config.ts";
 import { atomicWriteFile, renameWithRetry, unlinkWithRetry } from "../core/ops/atomic-file.ts";
-import { editHostConfigText, hostConfigValueAt, parseHostConfig } from "../core/ops/host-config.ts";
+import { fxMcpEntryIssue, ownMcpKey, editHostConfigText, hostConfigValueAt, parseHostConfig } from "../core/ops/host-config.ts";
 import { hostLayout, hostText, withLayout } from "../core/ops/host-text.ts";
 import { AGENT_FLAG, BACKUP_DIR, COMMAND_SKILLS, HOOK_BUNDLE, LOCK_FILE, SKILL_FILE, assertWritable, buildRegistry, configEdits, hookCommandString, renderSkill } from "./registry.ts";
 import type { CheckRow, HookFile, HookInstall, NativePlugin, SetupContext } from "./registry.ts";
@@ -68,7 +69,7 @@ export interface SetupOptions extends SetupContext {
   onAgent?: (id: AgentId, phase: "start" | "done", res?: AgentResult) => void;
 }
 
-interface Entry { agent: AgentId; file?: string; existed?: boolean; backup?: string; undo?: { bin: string; args: string[] }; ran?: { bin: string; args: string[] }; }
+interface Entry { agent: AgentId; file?: string; existed?: boolean; backup?: string; mode?: number; undo?: { bin: string; args: string[] }; ran?: { bin: string; args: string[] }; }
 interface Manifest { runId: string; path: string; entries: Entry[]; }
 
 // ---------- small helpers ----------
@@ -678,6 +679,16 @@ function hookCheck(row: CheckRow, env: SetupContext["env"]): Check {
  *  #1359 D-1359-CODEX-TOOLS-1: the user's tools table (per-tool approval_mode) is kept as it is. */
 function ownConfigEdits(row: CheckRow, c: NonNullable<CheckRow["config"]>, text: string): [readonly string[], unknown][] {
   const edits = configEdits(c);
+  if (row.id === "fx") {
+    const parsed = parseHostConfig(row.id, c.file, text, c.format);
+    const key = ownMcpKey(row.id, parsed);
+    const cur = hostConfigValueAt(parsed, key);
+    const issue = fxMcpEntryIssue(cur);
+    if (issue !== undefined) throw new Error(issue);
+    const value = { ...(isObj(cur) ? cur : {}), ...(isObj(c.value) ? c.value : {}) };
+    if (isObj(cur) && isObj(cur.env)) value.env = { ...cur.env, ...(isObj(value.env) ? value.env : {}) };
+    return [[key, value], ...edits.slice(1)];
+  }
   if (row.id !== "codex" || !isObj(c.value)) return edits;
   let cur: unknown;
   try { cur = hostConfigValueAt(parseHostConfig(row.id, c.file, text, c.format), c.key); } catch { return edits; }
@@ -705,6 +716,7 @@ function parseCheck(row: CheckRow): Check {
  *  edit left means the entry is there); a package channel is registered when the host list command shows it. */
 function hookRegisteredCheck(row: CheckRow, env: SetupContext["env"], list: Check | undefined): Check {
   const h = row.hookInstall;
+  if (h.kind === "none") return { name: "hook-registered", ok: true, warn: true, detail: HOOK_LIMITATION };
   if (h.kind === "package") {
     const l = row.listCommand;
     if (!l) return { name: "hook-registered", ok: false, detail: `no list command for ${row.id}` };
@@ -730,6 +742,7 @@ function hookRegisteredCheck(row: CheckRow, env: SetupContext["env"], list: Chec
  * resolved. The sample runs in its own temp HOME and project, so doctor never writes into the user's store.
  */
 export function hookRunsCheck(row: CheckRow, env: SetupContext["env"]): Check {
+  if (row.hookInstall.kind === "none") return { name: "hook-runs", ok: true, warn: true, detail: HOOK_LIMITATION };
   const root = mkdtempSync(path.join(tmpdir(), "cm-doctor-runs-"));
   try {
     const home = path.join(root, "home");
@@ -753,6 +766,7 @@ const SEEN_SQL = "SELECT 1 FROM events WHERE agent = ? LIMIT 1";
 export const NOT_SEEN_LINE = "not seen yet, run one tool call";
 /** ADR-0020 hook-seen: a journal row from this agent exists in any project db. None yet is a WARN, not a FAIL. */
 function hookSeenCheck(row: CheckRow, dataRoot: string): Check {
+  if (row.hookInstall.kind === "none") return { name: "hook-seen", ok: true, warn: true, detail: HOOK_LIMITATION };
   const base = path.join(dataRoot, PROJECTS_DIR_NAME);
   const dirs = existsSync(base) ? readdirSync(base) : [];
   let sqlite: typeof import("node:sqlite") | undefined;
@@ -1038,7 +1052,8 @@ class Run {
     if (!this.manifest) this.manifest = { runId: this.runId, path: this.dir, entries: [] };
     if (bytes !== undefined) {
       const rel = path.join(FILES, String(this.manifest.entries.length));
-      atomicWrite(path.join(this.dir, rel), bytes);
+      atomicWrite(path.join(this.dir, rel), bytes, e.agent === "fx" ? { fileMode: 0o600, dirMode: 0o700 } : {});
+      if (e.agent === "fx" && e.file && existsSync(e.file)) e.mode = statSync(e.file).mode & 0o777;
       e.backup = rel;
     }
     this.manifest.entries.push(e);
@@ -1056,7 +1071,7 @@ function undo(dir: string, entries: Entry[], env: SetupContext["env"]): void {
   for (const e of [...entries].reverse()) {
     if (e.undo) { runBin(e.undo.bin, e.undo.args, env); continue; }
     if (!e.file) continue;
-    if (e.existed && e.backup) atomicWrite(e.file, readFileSync(path.join(dir, e.backup), "utf8"));
+    if (e.existed && e.backup) atomicWrite(e.file, readFileSync(path.join(dir, e.backup), "utf8"), e.mode === undefined ? {} : { fileMode: e.mode });
     else unlinkWithRetry(e.file); // D-WIN-ATOMIC-4
   }
 }
@@ -1085,6 +1100,7 @@ function agentHomeDir(id: AgentId, ctx: SetupContext): string {
   if (id === "copilot-cli") return copilotDirOf(ctx.env, ctx.home); // D-WIN-COPILOT-HOME-1
   if (id === "kiro") return kiroDirOf(ctx.env, ctx.home); // D-WIN-KIRO-HOME-1
   if (id === "opencode") return opencodeDirOf(ctx.env, ctx.home); // D-WIN-OPENCODE-DIR-1
+  if (id === "fx") return fxDirOf(ctx.env, ctx.home);
   if (id === "gemini") return geminiDirOf(ctx.env, ctx.home); // D-R38-GEMINI-HOME-1
   return path.join(ctx.home, ...AGENT_HOME_DIR[id]);
 }
@@ -1166,7 +1182,7 @@ async function setupRow(row: CheckRow, ctx: SetupContext, run: Run, dryRun: bool
       assertWritable(row, e.file);
       const raw = readRaw(e.file); // the backup holds the bytes as they were, BOM and CRLF included
       run.record({ agent: row.id, file: e.file, existed: raw !== undefined }, raw);
-      atomicWrite(e.file, e.plain || raw === undefined ? e.after : withLayout(e.after, hostLayout(raw)));
+      atomicWrite(e.file, e.plain || raw === undefined ? e.after : withLayout(e.after, hostLayout(raw)), row.id === "fx" && e.file === row.config?.file ? { fileMode: 0o600, dirMode: 0o700 } : {});
     }
     for (const args of plan.cli) {
       const r = runBin(row.cli!.bin, args, ctx.env, row.cli!.input ?? "", INSTALL_TIMEOUT_MS);

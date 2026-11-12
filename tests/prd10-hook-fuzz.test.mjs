@@ -85,7 +85,7 @@ describe("PRD-v2 section 10: seeded hook fuzz on every host", () => {
   const PREFIX = Object.fromEntries(ADAPTERS.map((a) => [a.id, a.toolNamePrefix]));
   const SHELL = Object.fromEntries(ADAPTERS.map((a) => [a.id, a.nativeTools.shell ?? []]));
   const READ = Object.fromEntries(ADAPTERS.map((a) => [a.id, a.nativeTools.read ?? []]));
-  const HOSTS = ADAPTERS.map((a) => a.id);
+  const HOSTS = ADAPTERS.filter((a) => a.hookChannel.kind !== "none").map((a) => a.id);
 
   // Per host: the payload key set and the native event names.
   const SNAKE = { event: "hook_event_name", session: "session_id", tool: "tool_name", input: "tool_input", result: "tool_response", prompt: "prompt", cwd: "cwd" };

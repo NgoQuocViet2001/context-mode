@@ -351,7 +351,7 @@ const READ_IMAGES_AND_PDF: readonly ReadMediaType[] = Object.freeze([...READ_IMA
  *  A host with no checked media path keeps the size deny for every file. */
 export const READ_MEDIA_BY_AGENT: Readonly<Record<AgentId, readonly ReadMediaType[]>> = Object.freeze({
   "claude-code": READ_IMAGES_AND_PDF, gemini: READ_IMAGES_AND_PDF, qwen: READ_IMAGES_AND_PDF, opencode: READ_IMAGES_AND_PDF,
-  pi: READ_IMAGES, vscode: READ_IMAGES, zcode: READ_IMAGES, "copilot-cli": [], codex: [], kiro: [],
+  pi: READ_IMAGES, vscode: READ_IMAGES, zcode: READ_IMAGES, "copilot-cli": [], codex: [], kiro: [], fx: [],
 });
 
 // impl/09 §4 hooks dispatch (DEVIATIONS D-M3-H2-1..6). Keys and texts the dispatch reads; no numbers.
@@ -608,7 +608,7 @@ export const EXTENSIONS_DIR_NAME = "extensions"; // Gemini/Qwen: <agent home>/ex
 // Agent home dir segments under $HOME (ADR-0011 table; impl/07 §3 `home`). VS Code is project scope (<project>/.vscode).
 export const AGENT_HOME_DIR: Readonly<Record<AgentId, readonly string[]>> = Object.freeze({
   "claude-code": [".claude"], codex: [".codex"], gemini: [".gemini"], qwen: [".qwen"], "copilot-cli": [".copilot"],
-  vscode: [".vscode"], kiro: [".kiro"], zcode: [".zcode"], pi: [".pi"], opencode: [".config", "opencode"],
+  vscode: [".vscode"], kiro: [".kiro"], zcode: [".zcode"], pi: [".pi"], opencode: [".config", "opencode"], fx: [".fx"],
 });
 export const UPGRADE_RESTART_LINE = "restart needed"; // impl/07 §6 step 8
 export const UPGRADE_HOST_AREA = "host update"; // impl/07 §6 step 4
@@ -731,6 +731,7 @@ export const HOOK_HOST_FILE: Readonly<Record<AgentId, {
   zcode: { root: "home", file: [".zcode", "cli", "config.json"], key: ["hooks", "events"], shape: "zcode", timeoutKey: "timeoutMs", matcher: true },
   pi: null,
   opencode: null,
+  fx: null,
 });
 export const TOOL_HOOK_EVENTS: readonly string[] = Object.freeze(["PreToolUse", "PostToolUse"]); // canonical events that carry the matcher
 export const HOOK_MATCHER_FIELD = "matcher";
@@ -807,6 +808,7 @@ export const UPGRADE_HOST_COMMAND: Readonly<Record<AgentId, string>> = Object.fr
   qwen: "qwen extensions update context-mode",
   pi: "pi update --extensions",
   opencode: "opencode plugin update",
+  fx: "npm i -g context-mode && context-mode setup --agents fx",
   "copilot-cli": "npm i -g context-mode && context-mode setup --agents copilot-cli",
   vscode: "npm i -g context-mode && context-mode setup --agents vscode",
   kiro: "npm i -g context-mode && context-mode setup --agents kiro",
@@ -983,6 +985,7 @@ export const CODEX_OMIT_DEFERRED: readonly string[] = Object.freeze(["deferred"]
 export const CODEX_APPROVAL_MODE_FIELD = "default_tools_approval_mode";
 export const CODEX_APPROVAL_APPROVE = "approve";
 export const OWN_MCP_ENTRY: Readonly<Partial<Record<AgentId, OwnMcpEntry>>> = Object.freeze({
+  fx: { file: [".fx", "mcp.json"], key: ["mcpServers", SERVER_KEY] },
   codex: { file: [".codex", "config.toml"], key: ["mcp_servers", SERVER_KEY], fields: { [CODEX_OMIT_TOOLS_FROM_FIELD]: CODEX_OMIT_DEFERRED, [CODEX_APPROVAL_MODE_FIELD]: CODEX_APPROVAL_APPROVE } },
   vscode: { file: [VSCODE_MCP_FILE], key: ["servers", SERVER_KEY] },
   kiro: { file: [".kiro", "settings", "mcp.json"], key: ["mcpServers", SERVER_KEY] },

@@ -1,6 +1,6 @@
 # Context Mode
 
-**A free, local plugin for 10 coding agents. It keeps tool output out of your agent's context window and keeps all usage data on your machine. The plugin is free forever.**
+**A free, local plugin for 11 coding agents. It keeps tool output out of your agent's context window and keeps all usage data on your machine. The plugin is free forever.**
 
 [![npm downloads](https://img.shields.io/npm/dt/context-mode?label=npm%20downloads)](https://www.npmjs.com/package/context-mode) [![GitHub stars](https://img.shields.io/github/stars/mksglu/context-mode?style=flat&color=yellow)](https://github.com/mksglu/context-mode) [![Discord](https://img.shields.io/discord/1478479412700909750?label=Discord&logo=discord&color=5865f2)](https://discord.gg/DCN9jUgN5v) [![License: ELv2](https://img.shields.io/badge/License-ELv2-blue.svg)](LICENSE)
 
@@ -49,7 +49,7 @@ Starred by engineers at these companies: each name is the company field of 2 or 
 
 ## Install
 
-Pick your agent: [Claude Code](#install-claude-code) · [Codex](#install-codex) · [Gemini CLI](#install-gemini) · [Qwen Code](#install-qwen) · [Pi](#install-pi) · [OpenCode](#install-opencode) · [Copilot CLI](#install-copilot-cli) · [Kiro](#install-kiro) · [VS Code](#install-vscode) · [ZCode](#install-zcode)
+Pick your agent: [Claude Code](#install-claude-code) · [Codex](#install-codex) · [Gemini CLI](#install-gemini) · [Qwen Code](#install-qwen) · [Pi](#install-pi) · [OpenCode](#install-opencode) · [Copilot CLI](#install-copilot-cli) · [Kiro](#install-kiro) · [VS Code](#install-vscode) · [ZCode](#install-zcode) · [fx](#install-fx)
 
 Open its block and copy its own install command. Each block also holds the update, check and remove steps, and the [Install guide](https://contextmode.ai/docs/engine/install?utm_source=github&utm_medium=readme&utm_content=install) walks through them.
 
@@ -249,6 +249,27 @@ Hooks ✓ (hook file) · MCP ✓ · Skills ✓
 
 </details>
 
+<details id="install-fx"><summary><b>fx</b></summary>
+
+```sh
+npm i -g context-mode
+context-mode setup --agents fx
+```
+
+```sh
+# update
+context-mode upgrade
+# check
+fx mcp show context-mode
+context-mode doctor --agents fx
+# remove
+context-mode setup --remove --agents fx
+```
+
+Hooks: unavailable · MCP ✓ · Skills ✓
+
+</details>
+
 The npm route works for every agent:
 
 ```sh
@@ -268,10 +289,10 @@ Restart the agent, then run `/ctx-doctor` in it. Each check prints PASS or a fix
 <details><summary><b>How we tested the install</b></summary>
 
 Every agent gets hooks, the MCP server and the plugin skills; the last line of each block above says how.
-Hooks reach each agent in one of three ways: in the plugin package (Claude Code, Gemini CLI, Qwen Code), in a hook file (Codex, Copilot CLI, Kiro, VS Code, ZCode), or in a plugin inside the agent (OpenCode, Pi). The [Agents guide](https://contextmode.ai/docs/engine/agents?utm_source=github&utm_medium=readme&utm_content=install-agents) shows what each agent runs.
+fx uses MCP tools and skills. The other ten agents support hooks in one of three ways: in the plugin package (Claude Code, Gemini CLI, Qwen Code), in a hook file (Codex, Copilot CLI, Kiro, VS Code, ZCode), or in a plugin inside the agent (OpenCode, Pi). The [Agents guide](https://contextmode.ai/docs/engine/agents?utm_source=github&utm_medium=readme&utm_content=install-agents) shows what each agent runs.
 We ran the real binary of each agent with the plugin hook: Claude Code, Codex, Gemini CLI, Qwen Code, Pi, OpenCode, Copilot CLI and ZCode. Each run used a clean temp home and a local test model, on 2.0.0-next.15.
 For VS Code and Kiro, the check covers the hook setup: VS Code runs the hook command with the documented payload, and kiro-cli 2.35.2 loads all 6 hook entries.
-CI runs setup, doctor, a hook and an MCP handshake for all 10 agents from the packed package on Linux, macOS and Windows. Record: [HOOKS-FIRE.md](docs/architecture/release/HOOKS-FIRE.md).
+CI runs setup, doctor, a hook and an MCP handshake for all 10 hook-capable agents from the packed package on Linux, macOS and Windows. Record: [HOOKS-FIRE.md](docs/architecture/release/HOOKS-FIRE.md).
 Each agent uses its own install command, and [ADR-0023](docs/architecture/adr/ADR-0023-native-install.md) says why.
 
 </details>
@@ -315,6 +336,7 @@ Run the stats skill right after a prompt. Each agent uses its own command; the s
 | Qwen Code | `Call ctx_stats and show me the report.` |
 | VS Code (Copilot) | `/ctx-stats` |
 | ZCode | `Call ctx_stats and show me the report.` |
+| fx | `Call ctx_stats and show me the report.` |
 
 The first lines of a real report, after the JSON prompt above ran as one `ctx_execute` call:
 

@@ -19,7 +19,7 @@ import { hasReplace } from "../../adapters/table.ts";
 import { codexDirOf, copilotDirOf, homeDirOf, kiroDirOf, opencodeDirOf, ownMcpFileOf, piAgentDirOf } from "../project/config-dir.ts";
 import { hostText } from "./host-text.ts";
 import { detectV1, type V1Scope } from "./detect-v1.ts";
-import { hostConfigValueAt, isNodeCommand, mergeOwnEntries, opencodePluginFile, parseHostConfig, readHostConfig } from "./host-config.ts";
+import { fxMcpEntryIssue, ownMcpKey, hostConfigValueAt, isNodeCommand, mergeOwnEntries, opencodePluginFile, parseHostConfig, readHostConfig } from "./host-config.ts";
 import { marketplaceChoice, resolvePluginRoot } from "./plugin-root.ts";
 import { ownBundleDir } from "./bundle-dir.ts";
 import { piInstalledIn } from "../../setup/pi-gate.ts";
@@ -404,6 +404,15 @@ export function checkHostConfig(row: AdapterRow, env: NodeJS.ProcessEnv, worktre
     if ("installs" in choice) return fail("D3", D3_ROOT_DETAIL(choice.installs.map((r) => r.installPath)), D3_ROOT_FIX(choice.installs));
   }
   if (row.id === "pi") return checkPiInstall(env, home, worktree);
+  if (row.id === "fx") {
+    try {
+      const file = mcpFile(row, home, env)!;
+      const cur = readHostConfig(row.id, file);
+      const parsed = parseHostConfig(row.id, file, cur.text, cur.format);
+      const issue = fxMcpEntryIssue(hostConfigValueAt(parsed, ownMcpKey(row.id, parsed)));
+      if (issue !== undefined) return fail("D3", issue, "review the context-mode entry in " + file);
+    } catch { /* the normal MCP check below reports an invalid config */ }
+  }
   const parts: D3Part[] = [...(mcpWrong(row, home, env, worktree) ? [PART_MCP] : []), ...hookParts(row, home, env, worktree)];
   if (parts.length === 0) return pass("D3");
   const detail = D3_DETAIL(parts);
