@@ -1,0 +1,571 @@
+{
+  "schema_version": 1,
+  "environment": {
+    "os": "Linux x86_64",
+    "host": "WSL2 Ubuntu-24.04 on Windows",
+    "wsl_version": "2.7.10.0",
+    "private_state_filesystem": "Linux /tmp",
+    "artifact_filesystem": "mounted Windows data drive",
+    "python_version": "not recorded",
+    "real_model": false,
+    "model_id_is_fixture_label": "openai/gpt-5",
+    "network_model_endpoint": "127.0.0.1 only",
+    "fx_permission_mode": "auto",
+    "home": "isolated temporary directory",
+    "normal_credentials_used": false
+  },
+  "versions": {
+    "fx": {
+      "version": "0.0.16",
+      "version_observation": "Actual native --version captured before WSL outage",
+      "binary_sha256": "b8670dcc121b4289e2bdcd2a3e226fd64e3def53c976c42b42de72ee69f66cae",
+      "archive_sha256": "f0fb822c7be546c80bcc89d50521bc1454435e0c6f586e8420c4e2b84fa80599",
+      "install_route": "official Linux x86_64 release archive",
+      "source_checkout_not_used_for_runtime": "d1fdb60547a88aae7c95e37e56c5c1184e3e85a0"
+    },
+    "node": {
+      "version": "24.15.0",
+      "version_observation": "Actual Linux node --version captured before WSL outage",
+      "binary_sha256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c"
+    },
+    "context_mode": {
+      "package_version": "2.1.8",
+      "artifact_kind": "unpublished local source build including draft fx adapter",
+      "base_revision": "d55bdb551cf46f337af038caf5bd7b992886cc58",
+      "server_sha256": "51481ebda23e84194bc08891475aa44cd4500873bae258ca9dfa4733a3a7639e"
+    }
+  },
+  "method": {
+    "repetitions_per_cold_cell": 5,
+    "order": "reverse route order on even repetitions",
+    "tool_plan": "deterministic scripted policy",
+    "main_request_byte_definition": "normalized compact UTF-8 JSON including repeated history and tool schemas, excludes review and title side requests",
+    "tool_result_byte_definition": "each unique model-visible output value in UTF-8, includes native/MCP wrappers and discovery",
+    "timing": "native ask subprocess including startup and real tool work; no model inference delay; excludes fixture setup and server shutdown",
+    "token_usage": null,
+    "billed_cost_usd": null,
+    "limitations": [
+      "No autonomous model tool-choice or real-model reasoning measurement",
+      "No tokenizer, prompt-cache or dollar-saving inference",
+      "Verbose probes intentionally emit each input three times; compact controls provided",
+      "Five original source verbose rows excluded because harness omitted native retained-output recovery",
+      "Warm same-session harness not yet run in this environment due WSL launch outage"
+    ]
+  },
+  "harness": {
+    "bench.py": {
+      "formatted_shareable_sha256": "ea43266f1b2cd756a420a450d7493296341b8114bf2e70ae5336a1075663118b",
+      "format_only_ast_equality_verified": true,
+      "corrected_preformat_sha256": "84b39d102b53232abe657ea619abab4fafa5fb82ba0b2935e3c9d301a4d6be22",
+      "initial_60_run_harness_sha256": "not captured before the retained-output recovery correction",
+      "recovery_smoke_harness_sha256": "84b39d102b53232abe657ea619abab4fafa5fb82ba0b2935e3c9d301a4d6be22"
+    },
+    "warm.py": {
+      "formatted_shareable_sha256": "3b9888d4a5d73f207a4ae7498dc893bab1ca590838d1940e9cd7b374fcf6f590",
+      "format_only_ast_equality_verified": true,
+      "corrected_preformat_sha256": "873f15738991d335d1fe66aa35f8fdae6b1cefe5e64d974bd2a975dac3805180",
+      "measured_on_WSL": false
+    }
+  },
+  "fixtures": {
+    "nplus1": {
+      "same_fixture_variants_verified": 20,
+      "files_sha256": {
+        "analyze.py": "e751c96030bbd6d86b097893218e5fa466f6896d70befec1f7d7da716255252b",
+        "input.json": "28573ac5733fdfd16147e354a18199fa27c0013d54ac9911fcde6bdacbd85411"
+      }
+    },
+    "source_lookup": {
+      "same_fixture_variants_verified": 20,
+      "files_sha256": {
+        "analyze.py": "1625385540b1669855f3d3c8423a332999aa5b732fe9d60b2fe6771c119106b8",
+        "src/module_00.py": "e131afa0f7d1690317144b2d3ada178ee28b904c711a5d08adb9ce867e10b7b2",
+        "src/module_01.py": "306094190c2d837a73a9578a18559a5e6b22edcfa96c0042048b6bb735e10d22",
+        "src/module_02.py": "4a9d6ebf4c4009319d7905eb6b16ee9533f81d06bc53bc9498cda24a3eb498df",
+        "src/module_03.py": "6e2751c94ca556a20b8c2f3b6719be8803bf14dee5aedad03e3e9a8627ebc526",
+        "src/module_04.py": "312ba9cfbfec9f6876ca1e8e4e3d75b5cbb9e8399e08ea94fc8cfe3291c80d01",
+        "src/module_05.py": "7f061a3ee5a6ed3e685d06e830ad029de36f78e9d80c1c3ad189c0c335430734",
+        "src/module_06.py": "234970ebba060b9a175a795f3992341646e0a6e8d8213162b3d84fe12beb1bf0",
+        "src/module_07.py": "5498bad2387d9cf91d7a2542904b5fcade233506df6630d6906475adee25a347",
+        "src/module_08.py": "f665e87eb26fde92e19ec9f547c5bf66f06920dbee3fb1ab6afc8f571604c772",
+        "src/module_09.py": "954511f879cf8aeb6b8fc130100b4ff813b8a4b52e4ac87e12e2435a3731acab",
+        "src/module_10.py": "042d9fcdec5348268d85171e2cb7253bd8e2a9cbf659c8cf03e9e9697b8477c0",
+        "src/module_11.py": "7102081857b34d4f5a09c3e273ff7788499d7629726deddb25d8704d6ec34eb8",
+        "src/module_12.py": "53b9cc8089e3d6fdad9369883717f94cd329ce1f898004bf3efa0b87889bb279",
+        "src/module_13.py": "504953df43a7f24593d57a45b60fb2a203ec1d97487c519ae6eb5d70763e51df",
+        "src/module_14.py": "3f193915018ce6c5ec68b64515e79e9bef85e206d54f007824771689c29ee08a",
+        "src/module_15.py": "24cd47c9de2282bf115eac53fa6bcef527dcbb35d519d8b4398a612d9b80098d",
+        "src/module_16.py": "80d2ed840ad90e7509fada513235af1bfa7a4933d9744c0c14c9e1dcf6e71c3d",
+        "src/module_17.py": "a24d4878502b7b65fd0ec145ea10bad61c07b0812e77c11330658921a252391c",
+        "src/module_18.py": "03bafe510cc22df109b35597d826f6b0dc55df40b4c478e1732473a2e21867d4",
+        "src/module_19.py": "b67fa4c3f57a661f5d7f2efa5571b973e9726bb18f64fba6a4c60ebf14476a54",
+        "src/module_20.py": "4934fdd718542e08ea82851e0813949ecd8e7f14a41500d80d4d10135e0e3f7f",
+        "src/module_21.py": "a5e853c84227a767a821cfbf3750cfb1be6a84a38c6fd5f95aff9d1883e7d9ac",
+        "src/module_22.py": "f9779559b14af84f634cc1973a69a03e065a171e55d76e3e394e77add5ede979",
+        "src/module_23.py": "6e9cc6f1545e4aa58a5294f0e69f350095df51e82ec2fd7c8a9926e68ce73dd1",
+        "src/module_24.py": "dee443fd7019fa60d47c7698554d1fa64196376f684664c5c3904b040f2d9990",
+        "src/module_25.py": "ccf38f7cb3fd9b7b63e3185eea41cfbc1000f0fe990b891a269b3dc60083f3dc",
+        "src/module_26.py": "fd4a74bda73aac0b8edb69bfa83af16a2d76f7fc5bcdd9adc771ab892e985470",
+        "src/module_27.py": "2d10135cd9c4637caea51921055b258b278ca899154940483d9e64fe884733fd",
+        "src/module_28.py": "14b7b2c97fade87be30d14db060fd077bb699261f2b3fd62575c473406014edd",
+        "src/module_29.py": "f9e0a11e4fe22fc87cd4f2803b6253e2e546f10882149921349bc6287fe57cec",
+        "src/module_30.py": "ef3872377f86529d7e10000941fb6336fb2ff3bd9a9423afc7b585d7f5f30950",
+        "src/module_31.py": "73221c1fd1597bdbe44847f8607272d33ab4d56c4364c61ed6321965087abbfd",
+        "src/module_32.py": "5ea7af8d182fa56de98b24363845e9a9d10de8addff209fc8df227022cc3075f",
+        "src/module_33.py": "e3080add0e758b5279ab277e293326e718c5458f62220db030c20a762b23ef83",
+        "src/module_34.py": "89e41d4df5044aa8d175ea09cb8ad9f6f9767df14447a5753fbfa1f17fc256e5",
+        "src/module_35.py": "29a42fe141f1f6d7a5b7937b549e1587e4eda181572872e0df11906527340f2c",
+        "src/module_36.py": "656553baa81b1920839fd94052f3ff980c1d44b53fb038ace90295fd2fa58cf9",
+        "src/module_37.py": "65e68d69882a4b5a0611e11db58cf7d9c7b333057a97104d697f6f355f755551",
+        "src/module_38.py": "f5c846b3193bb15bfebbdccfe0bc456f8dbf2601514e1550323e061e4bb42d54",
+        "src/module_39.py": "5cf51be6b9e031fd6a1990c2ae13c83eab6f01a842bb4f71f84a45c83aee86e0",
+        "src/module_40.py": "0a2803fbdb5c909eb25024592170ce38d5780dcd25d6d586b40528283bf2d026",
+        "src/module_41.py": "882aadc3a5903ebe0345da5352ee450f3629152eb56491a68d5291c7d28da501",
+        "src/module_42.py": "9b19cd077e811f04c295df28871fad3e9f7eb9366543a252c8f084b10d466c9d",
+        "src/module_43.py": "f2f279d25db76823560e51c8fdea0218c53923a2cf6f14828f479b7428995480",
+        "src/module_44.py": "40eeb9db827bfdebed85917eb0b624a5500eefba8532034f0f915651d82ef630",
+        "src/module_45.py": "8cf338ffa08a2a1a0b490bf701b4dbbd6b9ea5fe238a10f613a65b35cb160e37",
+        "src/module_46.py": "9c3eaeefd48a4ab42aaa4c1cfd0696bc56d1e4b96339ac080456d4bf8ffd0ab4",
+        "src/module_47.py": "39a9a5173ce065e8103f92771c3b0f99a69f1601432d328a43fcc28c9f213b88"
+      }
+    },
+    "test_failures": {
+      "same_fixture_variants_verified": 20,
+      "files_sha256": {
+        "analyze.py": "2c7fb4523327727e48013589cce276c0e8841869f21540d7385721a40a2d9fbc",
+        "input.json": "7ca99a9c35cb7d54aa3dbb900c1d6cd73b270077896caced14899b2a0e09aff5"
+      }
+    }
+  },
+  "valid_cold_rows": 55,
+  "excluded_initial_source_rows": 5,
+  "cold_summary": [
+    {
+      "task": "nplus1",
+      "route": "native-verbose",
+      "passes": 5,
+      "runs": 5,
+      "unique_tool_result_text_bytes": {
+        "median": 16384,
+        "min": 16384,
+        "max": 16384
+      },
+      "main_request_json_bytes": {
+        "median": 81942,
+        "min": 81942,
+        "max": 81942
+      },
+      "wall_seconds": {
+        "median": 0.15721432099996946,
+        "min": 0.14767407800002275,
+        "max": 0.19032790900001828
+      },
+      "model_requests": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "tool_calls": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      },
+      "review_requests": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    },
+    {
+      "task": "nplus1",
+      "route": "cm-verbose",
+      "passes": 5,
+      "runs": 5,
+      "unique_tool_result_text_bytes": {
+        "median": 9813,
+        "min": 9813,
+        "max": 9813
+      },
+      "main_request_json_bytes": {
+        "median": 123603,
+        "min": 123603,
+        "max": 123603
+      },
+      "wall_seconds": {
+        "median": 0.6472531340000387,
+        "min": 0.4509050689999867,
+        "max": 0.7046266319999859
+      },
+      "model_requests": {
+        "median": 3,
+        "min": 3,
+        "max": 3
+      },
+      "tool_calls": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "review_requests": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    },
+    {
+      "task": "nplus1",
+      "route": "native-compact",
+      "passes": 5,
+      "runs": 5,
+      "unique_tool_result_text_bytes": {
+        "median": 539,
+        "min": 539,
+        "max": 539
+      },
+      "main_request_json_bytes": {
+        "median": 62555,
+        "min": 62555,
+        "max": 62555
+      },
+      "wall_seconds": {
+        "median": 0.14019654200001241,
+        "min": 0.13472581399997807,
+        "max": 0.16535096600000543
+      },
+      "model_requests": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "tool_calls": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      },
+      "review_requests": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    },
+    {
+      "task": "nplus1",
+      "route": "cm-compact",
+      "passes": 5,
+      "runs": 5,
+      "unique_tool_result_text_bytes": {
+        "median": 5594,
+        "min": 5594,
+        "max": 5594
+      },
+      "main_request_json_bytes": {
+        "median": 118440,
+        "min": 118440,
+        "max": 118440
+      },
+      "wall_seconds": {
+        "median": 0.7172160810000037,
+        "min": 0.6545565349999833,
+        "max": 0.8068288019999841
+      },
+      "model_requests": {
+        "median": 3,
+        "min": 3,
+        "max": 3
+      },
+      "tool_calls": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "review_requests": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    },
+    {
+      "task": "test_failures",
+      "route": "native-verbose",
+      "passes": 5,
+      "runs": 5,
+      "unique_tool_result_text_bytes": {
+        "median": 16384,
+        "min": 16384,
+        "max": 16384
+      },
+      "main_request_json_bytes": {
+        "median": 83632,
+        "min": 83632,
+        "max": 83632
+      },
+      "wall_seconds": {
+        "median": 0.15765355700000327,
+        "min": 0.14723669400001427,
+        "max": 0.1945298400000297
+      },
+      "model_requests": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "tool_calls": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      },
+      "review_requests": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    },
+    {
+      "task": "test_failures",
+      "route": "cm-verbose",
+      "passes": 5,
+      "runs": 5,
+      "unique_tool_result_text_bytes": {
+        "median": 6283,
+        "min": 6283,
+        "max": 6283
+      },
+      "main_request_json_bytes": {
+        "median": 119231,
+        "min": 119231,
+        "max": 119231
+      },
+      "wall_seconds": {
+        "median": 0.6631181540000171,
+        "min": 0.6351615300000049,
+        "max": 0.857137755999986
+      },
+      "model_requests": {
+        "median": 3,
+        "min": 3,
+        "max": 3
+      },
+      "tool_calls": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "review_requests": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    },
+    {
+      "task": "test_failures",
+      "route": "native-compact",
+      "passes": 5,
+      "runs": 5,
+      "unique_tool_result_text_bytes": {
+        "median": 690,
+        "min": 690,
+        "max": 690
+      },
+      "main_request_json_bytes": {
+        "median": 62672,
+        "min": 62672,
+        "max": 62672
+      },
+      "wall_seconds": {
+        "median": 0.14358606000001828,
+        "min": 0.1405996459999983,
+        "max": 0.17566972800000258
+      },
+      "model_requests": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "tool_calls": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      },
+      "review_requests": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    },
+    {
+      "task": "test_failures",
+      "route": "cm-compact",
+      "passes": 5,
+      "runs": 5,
+      "unique_tool_result_text_bytes": {
+        "median": 5745,
+        "min": 5745,
+        "max": 5745
+      },
+      "main_request_json_bytes": {
+        "median": 118520,
+        "min": 118520,
+        "max": 118520
+      },
+      "wall_seconds": {
+        "median": 0.67074818399999,
+        "min": 0.6501751800000193,
+        "max": 0.9052548860000229
+      },
+      "model_requests": {
+        "median": 3,
+        "min": 3,
+        "max": 3
+      },
+      "tool_calls": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "review_requests": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    },
+    {
+      "task": "source_lookup",
+      "route": "cm-verbose",
+      "passes": 5,
+      "runs": 5,
+      "unique_tool_result_text_bytes": {
+        "median": 7552,
+        "min": 7552,
+        "max": 7552
+      },
+      "main_request_json_bytes": {
+        "median": 120501,
+        "min": 120501,
+        "max": 120501
+      },
+      "wall_seconds": {
+        "median": 0.7247695380000323,
+        "min": 0.6713041389999717,
+        "max": 1.0359098149999681
+      },
+      "model_requests": {
+        "median": 3,
+        "min": 3,
+        "max": 3
+      },
+      "tool_calls": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "review_requests": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    },
+    {
+      "task": "source_lookup",
+      "route": "native-compact",
+      "passes": 5,
+      "runs": 5,
+      "unique_tool_result_text_bytes": {
+        "median": 556,
+        "min": 556,
+        "max": 556
+      },
+      "main_request_json_bytes": {
+        "median": 62526,
+        "min": 62526,
+        "max": 62526
+      },
+      "wall_seconds": {
+        "median": 0.16511657199998808,
+        "min": 0.14102152800001022,
+        "max": 0.18491146999997454
+      },
+      "model_requests": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "tool_calls": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      },
+      "review_requests": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    },
+    {
+      "task": "source_lookup",
+      "route": "cm-compact",
+      "passes": 5,
+      "runs": 5,
+      "unique_tool_result_text_bytes": {
+        "median": 5611,
+        "min": 5611,
+        "max": 5611
+      },
+      "main_request_json_bytes": {
+        "median": 118386,
+        "min": 118386,
+        "max": 118386
+      },
+      "wall_seconds": {
+        "median": 0.7279315019999899,
+        "min": 0.6216807570000356,
+        "max": 1.3787518950000504
+      },
+      "model_requests": {
+        "median": 3,
+        "min": 3,
+        "max": 3
+      },
+      "tool_calls": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "review_requests": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    }
+  ],
+  "native_source_recovery_smoke": {
+    "task": "source_lookup",
+    "route": "native-verbose",
+    "repetition": 1,
+    "exit_code": 0,
+    "wall_seconds": 0.2018144260000554,
+    "oracle_pass": true,
+    "final": {
+      "base_ms": 250,
+      "cap_ms": 8000,
+      "function": "compute_retry_delay",
+      "path": "src/module_31.py"
+    },
+    "model_requests": 3,
+    "review_requests": 1,
+    "title_requests": 1,
+    "tool_calls": 2,
+    "unique_tool_result_text_bytes": 16681,
+    "unique_tool_result_json_bytes": 18327,
+    "main_request_json_bytes": 129325,
+    "usage": {
+      "input_tokens": null,
+      "output_tokens": null
+    },
+    "observed_cost_usd": null,
+    "fixture_raw_output_bytes": 96070
+  },
+  "same_session_followups": {
+    "status": "not_run_on_WSL",
+    "harness": "warm.py"
+  }
+}
