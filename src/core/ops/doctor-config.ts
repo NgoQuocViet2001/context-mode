@@ -12,17 +12,18 @@ import {
   HOOKS_KEY, MCP_ANY_MATCH, POST_TOOL_USE, KIRO_ACTION_FIELD, KIRO_TOOL_MATCHERS, KIRO_TRIGGER_FIELD, MATCHER_ALT, MATCHER_ANY, MATCHER_CLOSE, MATCHER_OPEN,
   OPENCODE_BASE_CONFIG_FILE, OPENCODE_CONFIG_FILES, OPENCODE_GIT_SPEC, OPENCODE_NPM_SPEC_PREFIX, OPENCODE_MCP_COMMAND_FIELD, OPENCODE_PACKAGE_FIELD, OPENCODE_PLUGIN_KEY, OPENCODE_PLUGIN_PATH, OPENCODE_PLUGINS_KEY, OWN_MCP_ENTRY, OWN_TOOL_PREFIX, REGEX_ESCAPE,
   REGEX_SPECIAL_CHARS, SETTINGS_FILE, SHELL_QUOTE, TOOL_HOOK_EVENTS, V1_PATH_SEPS, VSCODE_CLAUDE_HOOKS_SETTING,
-  VSCODE_DIR_NAME, VSCODE_SETTINGS_FILE,
+  VSCODE_DIR_NAME, VSCODE_SETTINGS_FILE, FX_CONFIG_PARSE, FX_CONFIG_REVIEW, FX_PROFILE_FIX,
 } from "../contracts/constants.ts";
 import type { AdapterRow, AgentId, DoctorRow } from "../contracts/types.ts";
 import { hasReplace } from "../../adapters/table.ts";
 import { codexDirOf, copilotDirOf, homeDirOf, kiroDirOf, opencodeDirOf, ownMcpFileOf, piAgentDirOf } from "../project/config-dir.ts";
 import { hostText } from "./host-text.ts";
 import { detectV1, type V1Scope } from "./detect-v1.ts";
-import { hostConfigValueAt, isNodeCommand, mergeOwnEntries, opencodePluginFile, parseHostConfig, readHostConfig } from "./host-config.ts";
+import { fxMcpEntryIssue, fxProfileBytesIssue, fxProfileIssue, ownMcpKey, hostConfigValueAt, isNodeCommand, mergeOwnEntries, opencodePluginFile, parseHostConfig, readHostConfig } from "./host-config.ts";
 import { marketplaceChoice, resolvePluginRoot } from "./plugin-root.ts";
 import { ownBundleDir } from "./bundle-dir.ts";
 import { piInstalledIn } from "../../setup/pi-gate.ts";
+import { checkFxConfig } from "./fx-config-check.ts";
 
 type D3Part = (typeof D3_PARTS)[number];
 const [PART_MCP, PART_HOOKS, PART_TIMEOUT] = D3_PARTS;
@@ -342,7 +343,7 @@ function mcpWrong(row: AdapterRow, home: string, env: NodeJS.ProcessEnv, worktre
     if (row.id === "opencode") return !opencodeListed(file, worktree);
     const cur = readHostConfig(row.id, file);
     // D-DOC-RT-1: accept the entry setup writes (absolute node, OpenCode plugin file), not only the ctx_upgrade form.
-    return mergeOwnEntries(row.id, cur.text, cur.format, row, { nodePath: true, listEntries: [opencodePluginFile()] }).edits.length > 0;
+    return mergeOwnEntries(row.id, cur.text, cur.format, row, { nodePath: true, listEntries: [opencodePluginFile()] }, cur.path).edits.length > 0;
   } catch {
     return true; // root missing or the config did not parse: the entry is not what ctx_upgrade writes
   }
@@ -404,8 +405,29 @@ export function checkHostConfig(row: AdapterRow, env: NodeJS.ProcessEnv, worktre
     if ("installs" in choice) return fail("D3", D3_ROOT_DETAIL(choice.installs.map((r) => r.installPath)), D3_ROOT_FIX(choice.installs));
   }
   if (row.id === "pi") return checkPiInstall(env, home, worktree);
+  // D-FX-MCP-1: an fx profile setup refuses to write gets that refusal's own Fix: line, not "run setup" (a loop).
+  const fxFile = row.id === "fx" ? mcpFile(row, home, env)! : undefined;
+  if (fxFile !== undefined) {
+    const bytes = fxProfileBytesIssue(fxFile);
+    if (bytes !== undefined) return fail("D3", bytes.detail, bytes.fix);
+    try {
+      const cur = readHostConfig(row.id, fxFile);
+      const parsed = parseHostConfig(row.id, fxFile, cur.text, cur.format);
+      const issue = fxProfileIssue(parsed, fxFile) ?? fxMcpEntryIssue(hostConfigValueAt(parsed, ownMcpKey(row.id, parsed)), fxFile);
+      if (issue !== undefined) return fail("D3", issue.detail, issue.fix);
+    } catch {
+      return fail("D3", FX_CONFIG_PARSE(fxFile), FX_PROFILE_FIX(fxFile)); // fx rejects it too; setup again would refuse
+    }
+  }
   const parts: D3Part[] = [...(mcpWrong(row, home, env, worktree) ? [PART_MCP] : []), ...hookParts(row, home, env, worktree)];
-  if (parts.length === 0) return pass("D3");
+  if (parts.length === 0) {
+    if (fxFile !== undefined) {
+      const check = checkFxConfig(env, worktree, fxFile);
+      if (!check.ok) return fail("D3", check.detail!, check.fix ?? FX_CONFIG_REVIEW(fxFile));
+      if (check.warn) return { ...pass("D3"), status: "WARN", detail: check.detail! };
+    }
+    return pass("D3");
+  }
   const detail = D3_DETAIL(parts);
   // D-D3-SETUP-FIX-1: a wrong or absent MCP entry is fixed by setup (it writes the entry and the hooks), the same command
   // as the closing "Run in a terminal" line. Hook entries or timeout alone keep ctx_upgrade.

@@ -20,6 +20,7 @@ body:
         - zcode
         - pi
         - opencode
+        - fx
     validations:
       required: true
   - type: textarea

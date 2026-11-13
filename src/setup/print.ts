@@ -1,9 +1,10 @@
 // src/setup/print.ts: `context-mode setup --print <id>`, the manual step for one agent with absolute paths filled
 // in (owner 2026-10-25: users never type paths, JSON or scripts). Built from the same registry row setup applies,
 // so the printed step and the applied step cannot drift. Writes nothing.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
-import { editHostConfigText } from "../core/ops/host-config.ts";
+import { editHostConfigText, ownMcpKey, parseHostConfig } from "../core/ops/host-config.ts";
+import { hostText } from "../core/ops/host-text.ts";
 import { codexTrustEntries } from "./codex-trust.ts";
 import { configEdits, renderSkill } from "./registry.ts";
 import type { CheckRow } from "./registry.ts";
@@ -29,6 +30,16 @@ export function shellWord(s: string): string {
   return isShellSafe(s) ? s : `'${s.replaceAll("'", `'"'"'`)}'`;
 }
 
+// D-FX-MCP-1: fx reads mcp, or mcpServers when there is no mcp. The printed block names the container this profile
+// already uses, so following "add the context-mode entry and keep the rest" never leaves our entry where fx skips it.
+function fxPrintKey(file: string, format: NonNullable<CheckRow["config"]>["format"], key: readonly string[]): readonly string[] {
+  try {
+    return existsSync(file) ? ownMcpKey("fx", parseHostConfig("fx", file, hostText(readFileSync(file, "utf8")), format)) : key;
+  } catch {
+    return key;
+  }
+}
+
 export function printPlan(row: CheckRow, env?: Record<string, string | undefined>): PrintPlan {
   const steps: PrintStep[] = [];
   const h = row.hookInstall;
@@ -36,8 +47,10 @@ export function printPlan(row: CheckRow, env?: Record<string, string | undefined
     const c = row.config;
     // D-HA-CODEX-TRUST-1: codex trusts its hooks in the same config.toml, so the printed block carries the trust tables.
     const trust = h.kind === "file" && h.trust === c.file ? codexTrustEntries(h.file, h.shape, h.command, env) : [];
-    const block = editHostConfigText(row.id, c.file, "", c.format, [...configEdits(c), ...trust]).text;
-    steps.push({ kind: "config", file: c.file, format: c.format, key: c.key, block });
+    const [own, ...rest] = configEdits(c);
+    const key = row.id === "fx" ? fxPrintKey(c.file, c.format, c.key) : c.key;
+    const block = editHostConfigText(row.id, c.file, "", c.format, [[key, own[1]], ...rest, ...trust]).text;
+    steps.push({ kind: "config", file: c.file, format: c.format, key, block });
   } else if (row.cli) {
     for (const args of row.cli.install) steps.push({ kind: "run", argv: [row.cli.bin, ...args], ...(row.cli.input ? { input: row.cli.input } : {}) });
   }

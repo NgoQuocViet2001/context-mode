@@ -370,7 +370,7 @@ const READ_IMAGES_AND_PDF: readonly ReadMediaType[] = Object.freeze([...READ_IMA
  *  A host with no checked media path keeps the size deny for every file. */
 export const READ_MEDIA_BY_AGENT: Readonly<Record<AgentId, readonly ReadMediaType[]>> = Object.freeze({
   "claude-code": READ_IMAGES_AND_PDF, gemini: READ_IMAGES_AND_PDF, qwen: READ_IMAGES_AND_PDF, opencode: READ_IMAGES_AND_PDF,
-  pi: READ_IMAGES, vscode: READ_IMAGES, zcode: READ_IMAGES, "copilot-cli": [], codex: [], kiro: [],
+  pi: READ_IMAGES, vscode: READ_IMAGES, zcode: READ_IMAGES, "copilot-cli": [], codex: [], kiro: [], fx: [],
 });
 
 // impl/09 §4 hooks dispatch (DEVIATIONS D-M3-H2-1..6). Keys and texts the dispatch reads; no numbers.
@@ -627,7 +627,7 @@ export const EXTENSIONS_DIR_NAME = "extensions"; // Gemini/Qwen: <agent home>/ex
 // Agent home dir segments under $HOME (ADR-0011 table; impl/07 §3 `home`). VS Code is project scope (<project>/.vscode).
 export const AGENT_HOME_DIR: Readonly<Record<AgentId, readonly string[]>> = Object.freeze({
   "claude-code": [".claude"], codex: [".codex"], gemini: [".gemini"], qwen: [".qwen"], "copilot-cli": [".copilot"],
-  vscode: [".vscode"], kiro: [".kiro"], zcode: [".zcode"], pi: [".pi"], opencode: [".config", "opencode"],
+  vscode: [".vscode"], kiro: [".kiro"], zcode: [".zcode"], pi: [".pi"], opencode: [".config", "opencode"], fx: [".fx"],
 });
 export const UPGRADE_RESTART_LINE = "restart needed"; // impl/07 §6 step 8
 export const UPGRADE_HOST_AREA = "host update"; // impl/07 §6 step 4
@@ -750,6 +750,7 @@ export const HOOK_HOST_FILE: Readonly<Record<AgentId, {
   zcode: { root: "home", file: [".zcode", "cli", "config.json"], key: ["hooks", "events"], shape: "zcode", timeoutKey: "timeoutMs", matcher: true },
   pi: null,
   opencode: null,
+  fx: null,
 });
 export const TOOL_HOOK_EVENTS: readonly string[] = Object.freeze(["PreToolUse", "PostToolUse"]); // canonical events that carry the matcher
 export const HOOK_MATCHER_FIELD = "matcher";
@@ -837,6 +838,7 @@ export const UPGRADE_HOST_COMMAND: Readonly<Record<AgentId, string>> = Object.fr
   qwen: "qwen extensions update context-mode",
   pi: "pi update --extensions",
   opencode: "opencode plugin update",
+  fx: "npm i -g context-mode && context-mode setup --agents fx",
   "copilot-cli": "npm i -g context-mode && context-mode setup --agents copilot-cli",
   vscode: "npm i -g context-mode && context-mode setup --agents vscode",
   kiro: "npm i -g context-mode && context-mode setup --agents kiro",
@@ -1001,7 +1003,67 @@ export const MCP_TOOLS_FIELD = "tools"; // #1359 D-1359-CODEX-TOOLS-1: [mcp_serv
 export interface OwnMcpEntry {
   file: readonly string[]; key: readonly string[];
   fields?: Readonly<Record<string, unknown>>; also?: readonly (readonly [readonly string[], unknown])[];
+  permissions?: Readonly<{ fileMode: number; dirMode: number }>;
 }
+// D-FX-MCP-1 (proposed): fx exposes MCP and skills, with no external CLI hook channel.
+// mcp.json may contain provider credentials; replacement files and setup backups stay private (fx writes it 0600/0700 too).
+const PRIVATE_CONFIG_PERMISSIONS = Object.freeze({ fileMode: 0o600, dirMode: 0o700 });
+export const FILE_PERMISSION_MASK = 0o777;
+export const HOOK_UNAVAILABLE_DETAIL = (agent: AgentId): string => `${agent} CLI has no external command-hook channel; native tool interception and automatic session continuity are unavailable. Use the ctx MCP tools explicitly.`;
+export const FX_CONFIG_TIMEOUT_MS = 10_000; // fx mcp --help and fx mcp list return without starting a server
+export const FX_SHOW_TIMEOUT_MS = 35_000; // fx mcp show gives a server 30 s to start (fx src/core/mcp/mcp_contract.zig)
+export const FX_CONFIG_MAX_BYTES = 1024 * 1024;
+// fx reads at most 1 MiB of mcp.json and parses the bytes as they are, so a BOM fails (fx src/builtins/mcp.zig readProfile).
+export const FX_PROFILE_MAX_BYTES = 1024 * 1024;
+// fx cancels an MCP call that sends nothing for operation_timeout_ms (fx 0.0.16 default 60000, src/core/mcp/mcp_contract.zig);
+// ctx_execute and ctx_batch may run EXEC_TIMEOUT_MS; the margin lets a run that hits its own limit still send its reply.
+export const FX_OPERATION_TIMEOUT_FIELD = "operation_timeout_ms";
+export const FX_OPERATION_TIMEOUT_MS = EXEC_TIMEOUT_MS + 30_000;
+export const FX_HELP_PREFIX = "usage: fx mcp "; // `fx mcp --help` of the coding agent; the npm JSON viewer named fx prints other text
+export const FX_ENVIRONMENT_FIELD = "environment";
+export const FX_MCP_CONTAINER = "mcp"; // fx reads mcp and skips mcpServers when a profile has both (fx src/core/mcp/project_config.zig)
+export const FX_MCP_SERVERS_CONTAINER = "mcpServers";
+export const FX_ENABLED_FIELD = "enabled";
+export const FX_REQUIRED_FIELD = "required";
+// fx skips an entry with a value outside these integer ranges (fx src/core/mcp/project_config.zig parseTimeouts,
+// restart_limit); setup writes operation_timeout_ms itself.
+export const FX_ENTRY_RANGES: readonly (readonly [string, number, number])[] = Object.freeze([["startup_timeout_ms", 1, 0xffff_ffff], ["restart_limit", 0, 255]]);
+export const FX_TYPE_FIELD = "type";
+export const FX_URL_FIELD = "url";
+export const FX_STDIO_TYPES: readonly string[] = Object.freeze(["local", "stdio"]);
+export const FX_LIST_SOURCE = "profile";
+export const FX_LIST_TRANSPORT = "stdio";
+export const FX_LIST_IDLE = "not_started";
+export const FX_SHOW_READY = "ready";
+export const FX_ENTRY_DISABLED = (file: string): string => `the context-mode entry in ${file} is disabled or its enabled value is not true or false`;
+export const FX_ENTRY_TRANSPORT = (file: string): string => `the context-mode entry in ${file} is not a local stdio server`;
+export const FX_ENTRY_URL = (file: string): string => `the context-mode entry in ${file} has a url and no type`;
+export const FX_ENTRY_ENVIRONMENT = (file: string, field: string): string => `the ${field} map of the context-mode entry in ${file} holds a value that is not a string`;
+export const FX_ENTRY_VALUE = (file: string, field: string): string => `fx skips the context-mode entry in ${file}: its ${field} value is not one fx accepts`;
+export const FX_ENTRY_VALUE_FIX = (file: string, field: string): string => `correct or remove ${field} in the context-mode entry in ${file}`;
+export const FX_CONFIG_BOM = (file: string): string => `${file} starts with a UTF-8 byte order mark, which fx cannot read`;
+export const FX_BOM_FIX = (file: string): string => `save ${file} as UTF-8 without a byte order mark`;
+export const FX_CONFIG_TOO_LARGE = (file: string): string => `${file} is over 1 MiB, the most fx reads`;
+export const FX_SIZE_FIX = (file: string): string => `shorten ${file} to under 1 MiB`;
+export const FX_CONFIG_OBJECT = (file: string): string => `${file} does not hold a JSON object`;
+export const FX_CONFIG_CONTAINER_OBJECT = (file: string, field: string): string => `${field} in ${file} is not an object`;
+export const FX_CONFIG_PARSE = (file: string): string => `fx cannot read ${file}: it is not a plain file of valid JSON with unique keys`;
+export const FX_CONFIG_REVIEW = (file: string): string => `review the context-mode entry in ${file}`;
+export const FX_ENABLE_FIX = (file: string): string => `set "enabled": true on the context-mode entry in ${file}, or remove that entry`;
+// fx rejected the profile itself. Its own list names the reason; setup again cannot fix it.
+export const FX_PROFILE_FIX = (file: string): string => `run fx mcp list to see why fx cannot read ${file}, and correct that file`;
+// A failed install is rolled back, so these name a step that still works when the entry is gone.
+export const FX_LIST_FIX = (file: string): string => `add the entry that context-mode setup --print fx shows to ${file}, then run fx mcp list: it names why fx skips it`;
+export const FX_START_FIX = (file: string): string => `add the entry that context-mode setup --print fx shows to ${file}, then run fx mcp show context-mode: it names why the server did not start`;
+export const FX_PATH_UNAVAILABLE = "fx is not on PATH, so fx did not check the context-mode entry";
+export const FX_NOT_AGENT = "the fx on PATH is not the fx coding agent, so fx did not check the context-mode entry";
+export const FX_CONFIG_LIST_FAILED = "fx mcp list --json failed, so fx could not read its profile";
+export const FX_CONFIG_REJECTED = (file: string): string => `fx did not load the context-mode entry in ${file}`;
+export const FX_CONFIG_LIST_INVALID = "fx mcp list --json did not return a server list";
+export const FX_MCP_START_FAILED = "fx could not start the context-mode server";
+export const FX_MCP_NOT_READY = "fx did not report the context-mode server ready with all nine tools";
+export const FX_MCP_RESULT_INVALID = "fx mcp show context-mode --json did not return a server";
+export const FX_MCP_LAUNCH_SKIPPED = "the context-mode server was not started through fx, because the entry or the server check failed";
 export const ZCODE_MCP_FEATURE_KEY = Object.freeze(["features", "mcp"] as const);
 // D-N6-CODEX-DIRECT-1: Codex defers MCP tools behind tool_search; omit_tools_from = ["deferred"] (codex-rs
 // config/src/mcp_types.rs, core/src/tools/spec_plan.rs apply_mcp_tool_exposure_policy) makes them direct tools.
@@ -1013,6 +1075,7 @@ export const CODEX_OMIT_DEFERRED: readonly string[] = Object.freeze(["deferred"]
 export const CODEX_APPROVAL_MODE_FIELD = "default_tools_approval_mode";
 export const CODEX_APPROVAL_APPROVE = "approve";
 export const OWN_MCP_ENTRY: Readonly<Partial<Record<AgentId, OwnMcpEntry>>> = Object.freeze({
+  fx: { file: [".fx", "mcp.json"], key: [FX_MCP_SERVERS_CONTAINER, SERVER_KEY], fields: { [FX_OPERATION_TIMEOUT_FIELD]: FX_OPERATION_TIMEOUT_MS }, permissions: PRIVATE_CONFIG_PERMISSIONS },
   codex: { file: [".codex", "config.toml"], key: ["mcp_servers", SERVER_KEY], fields: { [CODEX_OMIT_TOOLS_FROM_FIELD]: CODEX_OMIT_DEFERRED, [CODEX_APPROVAL_MODE_FIELD]: CODEX_APPROVAL_APPROVE } },
   vscode: { file: [VSCODE_MCP_FILE], key: ["servers", SERVER_KEY] },
   kiro: { file: [".kiro", "settings", "mcp.json"], key: ["mcpServers", SERVER_KEY] },

@@ -49,7 +49,7 @@ Starred by engineers at these companies: each name is the company field of 2 or 
 
 ## Install
 
-Pick your agent: [Claude Code](#install-claude-code) · [Codex](#install-codex) · [Gemini CLI](#install-gemini) · [Qwen Code](#install-qwen) · [Pi](#install-pi) · [OpenCode](#install-opencode) · [Copilot CLI](#install-copilot-cli) · [Kiro](#install-kiro) · [VS Code](#install-vscode) · [ZCode](#install-zcode)
+Pick your agent: [Claude Code](#install-claude-code) · [Codex](#install-codex) · [Gemini CLI](#install-gemini) · [Qwen Code](#install-qwen) · [Pi](#install-pi) · [OpenCode](#install-opencode) · [Copilot CLI](#install-copilot-cli) · [Kiro](#install-kiro) · [VS Code](#install-vscode) · [ZCode](#install-zcode) · [fx](#install-fx)
 
 Open its block and copy its own install command. Each block also holds the update, check and remove steps, and the [Install guide](https://contextmode.ai/docs/engine/install?utm_source=github&utm_medium=readme&utm_content=install) walks through them.
 
@@ -249,6 +249,27 @@ Hooks ✓ (hook file) · MCP ✓ · Skills ✓
 
 </details>
 
+<details id="install-fx"><summary><b>fx</b></summary>
+
+```sh
+npm i -g context-mode
+context-mode setup --agents fx
+```
+
+```sh
+# update
+context-mode upgrade
+# check
+fx mcp show context-mode
+context-mode doctor --agents fx
+# remove
+context-mode setup --remove --agents fx
+```
+
+Hooks: unavailable · MCP ✓ · Skills ✓
+
+</details>
+
 The npm route works for every agent:
 
 ```sh
@@ -267,11 +288,11 @@ Restart the agent, then run `/ctx-doctor` in it. Each check prints PASS or a fix
 
 <details><summary><b>How we tested the install</b></summary>
 
-Every agent gets hooks, the MCP server and the plugin skills; the last line of each block above says how.
-Hooks reach each agent in one of three ways: in the plugin package (Claude Code, Gemini CLI, Qwen Code), in a hook file (Codex, Copilot CLI, Kiro, VS Code, ZCode), or in a plugin inside the agent (OpenCode, Pi). The [Agents guide](https://contextmode.ai/docs/engine/agents?utm_source=github&utm_medium=readme&utm_content=install-agents) shows what each agent runs.
+Every agent gets the MCP server and the plugin skills, and every agent but fx gets hooks ([ADR-0026](docs/architecture/adr/0026-fx-mcp-client.md), proposed); the last line of each block above says how.
+Hooks reach the ten hook agents in one of three ways: in the plugin package (Claude Code, Gemini CLI, Qwen Code), in a hook file (Codex, Copilot CLI, Kiro, VS Code, ZCode), or in a plugin inside the agent (OpenCode, Pi). The [Agents guide](https://contextmode.ai/docs/engine/agents?utm_source=github&utm_medium=readme&utm_content=install-agents) shows what each agent runs.
 We ran the real binary of each agent with the plugin hook: Claude Code, Codex, Gemini CLI, Qwen Code, Pi, OpenCode, Copilot CLI and ZCode. Each run used a clean temp home and a local test model, on 2.0.0-next.15.
 For VS Code and Kiro, the check covers the hook setup: VS Code runs the hook command with the documented payload, and kiro-cli 2.35.2 loads all 6 hook entries.
-CI runs setup, doctor, a hook and an MCP handshake for all 10 agents from the packed package on Linux, macOS and Windows. Record: [HOOKS-FIRE.md](docs/architecture/release/HOOKS-FIRE.md).
+CI runs setup, doctor, a hook and an MCP handshake for the ten hook agents from the packed package on Linux, macOS and Windows. Record: [HOOKS-FIRE.md](docs/architecture/release/HOOKS-FIRE.md).
 Each agent uses its own install command, and [ADR-0023](docs/architecture/adr/ADR-0023-native-install.md) says why.
 
 </details>
@@ -308,6 +329,7 @@ Run the stats skill right after a prompt. Each agent uses its own command; the s
 | Claude Code | `/ctx-stats` |
 | Codex | `$ctx-stats` |
 | Copilot CLI | `/ctx-stats` |
+| fx | `Call ctx_stats and show me the report.` |
 | Gemini CLI | `Call ctx_stats and show me the report.` |
 | Kiro | `Call ctx_stats and show me the report.` |
 | OpenCode | `Call ctx_stats and show me the report.` |

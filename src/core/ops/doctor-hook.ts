@@ -13,7 +13,7 @@ import { replyErrors } from "./hook-shape.ts";
 import {
   AGENT_ARG, D5_CODEX_UNTRUSTED_DETAIL, D5_FIX, D5_READ_MEDIA_DETAIL, D5_READ_OWN_DETAIL, D5_READ_RANGE_DETAIL, OUTPUT_CAP, D5_READ_SHAPE_DETAIL, REPLACE_TRIGGER_BYTES, D5_NO_FIXTURE_DETAIL, D5_SHAPE_DETAIL, D5_FIXTURE_FILE_ABSENT, D5_FIXTURE_PARSE, D5_FIXTURE_AGENT_ABSENT, D5_SLOW_DETAIL, D5_SLOW_START_DETAIL, D5_IN_PROCESS_DETAIL, D5_BARE_SHARE, D5_STOP_DETAIL, DATA_DIR_ENV, HOOK_ERROR_LOG_FILE,
   DOCTOR_LABEL, DOCTOR_PASS_DETAIL, HOOK_ENTRY_FILE, HOOK_FIXTURE_DIR, HOOK_FIXTURE_FILE, HOOK_P95_MS,
-  HOOK_TIMEOUT_MS, HOOKS_JSON_FILE,
+  HOOK_TIMEOUT_MS, HOOKS_JSON_FILE, HOOK_UNAVAILABLE_DETAIL,
 } from "../contracts/constants.ts";
 import type { AgentId } from "../contracts/agents.ts";
 import type { DbHandle, DoctorRow } from "../contracts/types.ts";
@@ -84,7 +84,7 @@ function loadFixture(bundleDir: string, agent: AgentId): FixtureEntry | { cause:
 
 // D-D5-ALL-AGENTS-1: the payload key that carries the project dir. OpenCode's plugin sends `directory` (adapters/opencode.ts decode).
 const CWD_KEY: Readonly<Record<AgentId, string>> = {
-  "claude-code": "cwd", codex: "cwd", gemini: "cwd", qwen: "cwd", "copilot-cli": "cwd", vscode: "cwd", kiro: "cwd", zcode: "cwd", pi: "cwd", opencode: "directory",
+  "claude-code": "cwd", codex: "cwd", gemini: "cwd", qwen: "cwd", "copilot-cli": "cwd", vscode: "cwd", kiro: "cwd", zcode: "cwd", pi: "cwd", opencode: "directory", fx: "cwd",
 };
 
 /** The fixture payload with the agent's cwd key set to the project worktree: a recorded /tmp/project is no repository and would log a hook error each run. */
@@ -278,6 +278,7 @@ export async function codexStopDetail(i: HookCheckInput, timeoutMs: number): Pro
 }
 
 export async function checkHookRoundTrip(i: HookCheckInput): Promise<DoctorRow> {
+  if (getAdapter(i.agent).hookChannel.kind === "none") return row("WARN", HOOK_UNAVAILABLE_DETAIL(i.agent));
   // D-NI-CODEX-TRUST-3: the native plugin route leaves no hooks.json, so the host is asked (hooks/list), as the terminal doctor does.
   // A hook Codex lists untrusted never runs, whatever hook.mjs answers here. No answer from Codex: no claim, the round trip decides.
   if (i.agent === "codex") {

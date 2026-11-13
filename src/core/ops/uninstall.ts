@@ -9,7 +9,7 @@ import {
   PI_PACKAGE_SOURCE_KEY, PI_PACKAGES_KEY, PROJECTS_DIR_NAME, SETTINGS_FILE, UPGRADE_AREA_KEY_SEP,
   UPGRADE_CACHE_AREA, UPGRADE_CACHE_BY_HAND, UPGRADE_CONFIG_AREA, UPGRADE_DATA_AREA, UPGRADE_DATA_DELETED,
   UPGRADE_DATA_KEPT, UPGRADE_NOT_FOUND, UPGRADE_OWN_ENTRY, UPGRADE_REMOVED, UPGRADE_SERVER_AREA,
-  UPGRADE_SERVER_RUNNING, UPGRADE_SERVER_STOPPED, V1_KEY_PATH_SEP,
+  UPGRADE_SERVER_RUNNING, UPGRADE_SERVER_STOPPED, V1_KEY_PATH_SEP, FX_MCP_CONTAINER, FX_MCP_SERVERS_CONTAINER, SERVER_KEY,
 } from "../contracts/constants.ts";
 import { CtxError } from "../contracts/errors.ts";
 import type { AdapterRow, AgentId, ProjectContext, UpgradeChangeRow } from "../contracts/types.ts";
@@ -116,22 +116,28 @@ function ownEntries(agent: AgentId, env: NodeJS.ProcessEnv): OwnEntry[] {
   const mcp = OWN_MCP_ENTRY[agent];
   if (mcp !== undefined) {
     // The own entry sits at key = [top, ...inner, own] (zcode: mcp.servers.context-mode, D-HF-ZCODE-SHAPE-1).
-    const top = mcp.key[0];
-    const inner = mcp.key.slice(1, -1);
-    const own = mcp.key[mcp.key.length - 1];
-    const holder = (v: unknown): unknown => inner.reduce<unknown>((cur, k) => (isObj(cur) ? cur[k] : undefined), v);
-    const without = (v: unknown, path: readonly string[]): unknown => {
-      const o = v as Record<string, unknown>;
-      if (path.length === 0) return Object.fromEntries(Object.entries(o).filter(([k]) => k !== own));
-      return { ...o, [path[0]]: without(o[path[0]], path.slice(1)) };
+    const file = ownMcpFileOf(agent, mcp.file, env, home);
+    const entryAt = (key: readonly string[]): OwnEntry => {
+      const top = key[0];
+      const inner = key.slice(1, -1);
+      const own = key[key.length - 1];
+      const holder = (v: unknown): unknown => inner.reduce<unknown>((cur, k) => (isObj(cur) ? cur[k] : undefined), v);
+      const without = (v: unknown, path: readonly string[]): unknown => {
+        const o = v as Record<string, unknown>;
+        if (path.length === 0) return Object.fromEntries(Object.entries(o).filter(([k]) => k !== own));
+        return { ...o, [path[0]]: without(o[path[0]], path.slice(1)) };
+      };
+      return {
+        file,
+        key: top,
+        shown: key.join(V1_KEY_PATH_SEP),
+        has: (v) => { const h = holder(v); return isObj(h) && Object.hasOwn(h, own); },
+        drop: (v) => without(v, inner),
+      };
     };
-    return [{
-      file: ownMcpFileOf(agent, mcp.file, env, home),
-      key: top,
-      shown: mcp.key.join(V1_KEY_PATH_SEP),
-      has: (v) => { const h = holder(v); return isObj(h) && Object.hasOwn(h, own); },
-      drop: (v) => without(v, inner),
-    }];
+    // D-FX-MCP-1: an fx profile can hold our entry under mcp or mcpServers (both when a user added mcp later); drop both.
+    if (agent === "fx") return [entryAt([FX_MCP_CONTAINER, SERVER_KEY]), entryAt([FX_MCP_SERVERS_CONTAINER, SERVER_KEY])];
+    return [entryAt(mcp.key)];
   }
   if (agent === "opencode") {
     return [{

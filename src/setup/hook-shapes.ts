@@ -72,4 +72,5 @@ export const HOOK_SHAPES: Readonly<Record<AgentId, ((row: AdapterRow, cmd: strin
   zcode: zcodeShape,
   pi: null,
   opencode: null,
+  fx: null,
 };
