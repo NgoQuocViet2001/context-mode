@@ -67,7 +67,8 @@ describe("ADR-0026 (proposed): fx MCP profile (setup, doctor, remove)", () => {
    *  ignores it. PATH is only `bin`, where a test puts its fake fx: an fx installed next to node (an npm global, such
    *  as the JSON viewer) stays out of the tests. */
   function fxSandbox(t) {
-    const root = mkdtempSync(path.join(tmpdir(), "cm-fx-"));
+    // The real path: Windows runners set TEMP as an 8.3 short path, and setup and fx name the long one.
+    const root = realpathSync.native(mkdtempSync(path.join(tmpdir(), "cm-fx-")));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const home = path.join(root, "home");
     const pkgDir = path.join(root, "pkg");
