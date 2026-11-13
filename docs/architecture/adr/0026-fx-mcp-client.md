@@ -30,6 +30,19 @@ Other fx behaviour that shapes the integration:
 4. Setup and doctor check the entry through fx. `fx mcp list --json` must list the entry from that profile as a stdio server that is not started, then `fx mcp show context-mode --json` must report it ready with the nine tools. Without the fx coding agent on PATH both checks are WARN. The three hook checks are WARN.
 5. Detection: a `~/.fx` folder, or an fx on PATH whose `fx mcp --help` is the coding agent's. On Windows, where fx has no build, only the folder counts and no fx is run.
 
+## Measured
+
+`bench/fx/run.mjs`: fx 0.0.16, Linux x86_64 (Ubuntu 24.04 under WSL 2), Node 24.15.0, a scripted loopback provider, 5 runs per case, every run correct.
+
+| Case | Native: tool text / request bytes | Context Mode: tool text (of it, tool discovery) / request bytes |
+|---|---:|---:|
+| compact | 688 / 68,734 | 5,758 (5,367) / 130,012 |
+| 8 KiB | 8,984 / 77,098 | 14,059 (5,367) / 138,383 |
+| 64 KiB | 16,793 / 133,032 | 13,387 (11,964) / 255,524 |
+| four suites in one session | 67,126 / 662,264 | 17,798 (11,964) / 713,262 |
+
+Above OUTPUT_CAP the command output that reaches the model falls (16,793 to 1,423 B at 64 KiB; 67,126 to 5,834 B over the session). Tool discovery costs 5,367 to 11,964 B once per conversation, and the schemas it loads go out with every later request, so request bytes rise in every case. In the session the main requests are smaller (608,969 against 628,863 B) and the rise is fx's permission review of each ctx call (103,622 against 32,730 B). Wall time, the whole `fx ask` with fx and server start: 143 against 428 ms at 64 KiB and 362 against 693 ms over the session (median of 5). A scripted provider drives both routes, so these runs do not show which tools a model picks.
+
 ## Consequences
 
 - fx users get the ctx tools, the store and the three skills.

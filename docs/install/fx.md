@@ -52,7 +52,7 @@ It puts each touched file back as it was before setup, so a server added to `~/.
 ## Known limits
 
 - fx 0.0.16 ships Linux and macOS builds only. On Windows, run fx and context-mode inside WSL. On Windows, `context-mode setup` finds fx only by a `~/.fx` folder and never runs an `fx` from PATH.
-- fx 0.0.16 loads the tools of a profile server on demand: the model calls `capability_search` or `mcp_select_tool` before its first ctx tool call. That adds request bytes.
+- fx 0.0.16 loads the tools of a profile server on demand: the model calls `capability_search` or `mcp_select_tool` before its first ctx tool call. That adds request bytes ([fx benchmark](../../bench/fx/README.md)).
 - No hook, so nothing redirects or replaces a large `shell`, `read_file` or `grep_files` result, and nothing is injected at compaction. The model picks `ctx_execute` on its own, and the fx system prompt says a listed server is not a reason to use MCP.
 - fx passes only `HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM` and `USER` to the server, plus the entry's env map (`environment`, or `env` when there is no `environment`). A command run through `ctx_execute` sees those, `PWD` and the color settings `ctx_execute` adds. Add any other variable to that map.
 - fx does not read `disable-model-invocation` in a skill file, so the model can call the three skills on its own.
