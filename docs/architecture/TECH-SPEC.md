@@ -70,6 +70,7 @@ M7 is not done. Open items are listed in `https://github.com/mksglu/context-mode
 ## 2. Scope
 
 - **[D] Agents (10):** Claude Code, Codex CLI, Gemini CLI, Qwen Code, Copilot CLI, VS Code Copilot, Kiro, ZCode, Pi, OpenCode 2.
+- **[P] fx (MCP client):** fx 0.0.16 reads `~/.fx/mcp.json` and `~/.fx/skills`; its tools are `mcp_context-mode_*`, found through `capability_search`. No hooks and no compaction delivery ([ADR-0026](adr/0026-fx-mcp-client.md)).
 - **[D] Removed:** agy (PRD §15.5), OMP (G20), Cursor, JetBrains, Zed, Kimi, Kilo, OpenClaw, OpenCode 1.x, Codex Desktop.
 - **[D]** One `context.db` per project (G21, ADR-0002). Users install with `npm i -g context-mode && context-mode setup` (ADR-0019); the git `release` branch stays for the Claude Code marketplace (G12–G14, G22). Users get 3 command skills (`/ctx-stats`, `/ctx-doctor`, `/ctx-upgrade`) plus this repo's own `/release` skill (not shipped to users); `ctx_doctor` and `ctx_upgrade` are MCP tools; `context-mode doctor` and `context-mode upgrade` are the CLI forms that can fix (ADR-0010, ADR-0019 section 2).
 
@@ -584,3 +585,4 @@ R1–R8 of ADR-0017; the v1-migration live case set; final doc sign-off.
 - r9 intern-question close (2026-10-16, role S1): §9 states which spikes gate M0 step 6 (`S-NODE`, `S-TIMEOUT`, `S-CODEX` only; `S-COPILOT`/`S-ZCODE`/`S-NAMES`/`S-SKILLS`/`G25` are M2/M3 and print `SKIPPED`, not `FAIL`, before then).
 - M7-S1 (2026-10-19): §1.1 added: GS1–GS11 status from `gate.mjs --milestone M7` and `e2e/live/run.mjs --all`. GS5/GS10 fail on `check-removed.mjs` (22 paths), GS11 fails on live T-CMP; R1, R2 PENDING owner (D-M7-arch-5). M7 not marked done.
 - M7-S2 (2026-10-19): §1.1 re-measured on d1accdd4. GS5 and GS10 R3–R8 now PASS (`check-removed.mjs` exit 0, 6/6 v1-migration cases); gate --milestone M7 all layers PASS; live --all 27/31 (4 FAIL). GS6 fails (T-GS6 Claude Code p95 46 ms, T-F1 291 ms), GS11 fails (ci-config timeout 10 vs 20, T-CMP). R1, R2 PENDING owner. M7 not marked done.
+- ADR-0026 (2026-11-12, proposed): §2 lists fx as a [P] MCP client.

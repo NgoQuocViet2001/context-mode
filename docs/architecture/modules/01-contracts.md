@@ -16,13 +16,15 @@ Write them in this order: `types.ts` needs `AgentId` from `agents.ts`; `errors.t
 Exports:
 
 ```ts
-export const AGENT_IDS = ["claude-code","codex","gemini","qwen","copilot-cli","vscode","kiro","zcode","pi","opencode"] as const;
+export const AGENT_IDS = ["claude-code","codex","gemini","qwen","copilot-cli","vscode","kiro","zcode","pi","opencode","fx"] as const;
 export type AgentId = typeof AGENT_IDS[number];
 ```
 
 Source: PRD-v2 §3 (10-agent table), TECH-SPEC §2, 00-architecture §3.1. Order matches the PRD §3 table top to bottom. No other export. No function: this file is data only.
 
-E2E case: GP1 (install across all 10 adapters reads this exact list). ADR-0017 `covers`: `src/core/contracts/agents.ts`.
+`fx` comes last, after the PRD §3 order (ADR-0026, proposed).
+
+E2E case: GP1 (install across the ten hook hosts reads this list); `tests/0026-fx-mcp-client.test.mjs` covers fx. ADR-0017 `covers`: `src/core/contracts/agents.ts`.
 
 ## 2. `src/core/contracts/types.ts`
 
@@ -230,3 +232,4 @@ ADR-0017 `covers`: `src/core/contracts/errors.ts`.
 - `AdapterRow.compactSummary` row added to the field table (DECISIONS-r6 D6, https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/tickets/memory-r6/eval/results.md).
 - A-C4: `MCP_HINT_EVERY`'s env override (`CTX_MCP_HINT_EVERY`) falls back to `10` on a non-numeric or non-positive value, since Q1 names the default and the override but not its own validation rule.
 - `AdapterRow` gains `toolNamePrefix` Codex note, `nativeTools`, `execReadOnlyHint` rows; constants gain `SYNC_INDEX_MAX_BYTES`, `RATIO_SECTION_DECAY`, `MAX_CANDIDATES_TOTAL`, `SEARCH_PAGE_SIZE`, `MAX_CHUNK_BYTES`, `SNIPPET_MAX_BYTES`, `REQUIRE_SECURITY_ENV`; `ErrorCode` and the error table gain `INVALID_ARGS`, `ONE_OF_INPUT`, `SPAWN_FAILED`; §4.3 step 2 spells out the full scan algorithm for `<name>` tokens, and A-C5 states the no-nesting/no-escape rule (DECISIONS-r9).
+- 2026-11-12 (ADR-0026, proposed): `AGENT_IDS` gains `fx` at the end.
