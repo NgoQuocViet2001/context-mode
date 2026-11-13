@@ -1027,7 +1027,7 @@ describe("ADR-0015 repo: README agent lines", () => {
   });
 
   test("readme-agents: every host row says it has hooks, from its hookChannel in table.ts", () => {
-    const rows = agentRows();
+    const rows = agentRows().filter((r) => r.id !== "fx"); // fx (ADR-0026, proposed): the next test
     assert.equal(rows.length, 10);
     for (const r of rows) {
       const a = ADAPTERS.find((x) => x.id === r.id);
@@ -1037,6 +1037,13 @@ describe("ADR-0015 repo: README agent lines", () => {
       assert.equal(r.skills, "yes", r.id);
       assert.ok(r.install.length > 0, r.id);
     }
+  });
+
+  test("readme-agents: the fx row says hooks are unavailable (ADR-0026, proposed)", () => {
+    const r = agentRows().find((x) => x.id === "fx");
+    assert.equal(r.hooks, "unavailable");
+    assert.equal(r.skills, "yes");
+    assert.ok(r.install.length > 0);
   });
 
   test("readme-agents: D-README-INPROC-WORDS-1 user text says plugin inside the agent, never in-process", () => {
@@ -1050,7 +1057,8 @@ describe("ADR-0015 repo: README agent lines", () => {
       const text = readFileSync(path.join(REPO, rel), "utf8");
       assert.ok(!/in[- ]process/i.test(text), `${rel} still says in-process / in process`);
     }
-    assert.ok(README.includes("Hooks reach each agent in one of three ways"), "the README sentence stays");
+    assert.ok(README.includes("Hooks reach the ten hook agents in one of three ways:"), "the ten-host hook explanation stays");
+    assert.ok(README.includes("every agent but fx gets hooks"), "fx MCP scope is explicit");
     assert.ok(README.includes("plugin inside the agent (OpenCode, Pi)"), "the README sentence names the plugin inside the agent");
   });
 
@@ -1060,7 +1068,7 @@ describe("ADR-0015 repo: README agent lines", () => {
     assert.deepEqual(Object.keys(lines).sort(), ADAPTERS.map((a) => a.id).sort());
     for (const r of agentRows()) {
       const l = lines[r.id];
-      assert.ok(l.startsWith(LINE_PREFIX + " ("), `${r.id}: ${l}`);
+      assert.ok(l.startsWith(r.id === "fx" ? "Hooks: unavailable" : LINE_PREFIX + " ("), `${r.id}: ${l}`);
       for (const need of [" · MCP ✓", " · Skills ✓"]) assert.ok(l.includes(need), `${r.id} line lacks ${need}`);
       assert.ok(!l.includes("`"), `${r.id} line holds inline code: ${l}`);
       assert.ok(!l.includes("Guide:") && !l.includes("]("), `${r.id} line holds a link (D-README-LINKS-2): ${l}`);
@@ -1082,7 +1090,7 @@ describe("ADR-0015 repo: README agent lines", () => {
     assert.ok(by.codex.includes("codex plugin add"), by.codex);
     assert.ok(by.gemini.includes("gemini extensions install"), by.gemini);
     assert.ok(by.pi.includes("pi install"), by.pi);
-    for (const id of ["copilot-cli", "kiro", "vscode"]) assert.ok(by[id].includes("context-mode setup"), by[id]);
+    for (const id of ["copilot-cli", "kiro", "vscode", "fx"]) assert.ok(by[id].includes("context-mode setup"), by[id]);
     assert.ok(by.zcode.includes("zcode plugins install"), by.zcode);
   });
 
@@ -1437,7 +1445,7 @@ describe("ADR-0015 repo: README thesis, links and figures (D-README-THESIS-1)", 
     assert.ok(!readme.includes('href="#"'), "README links a badge to #");
     assert.ok(!readme.includes("img.shields.io/badge/Microsoft"), "company badges are one rendered image now (D-README-OSS-1)");
     assert.ok(readme.includes("<details>"), "README uses details blocks");
-    for (const id of ["claude-code", "codex", "copilot-cli", "gemini", "kiro", "opencode", "pi", "qwen", "vscode", "zcode"]) {
+    for (const id of ["claude-code", "codex", "copilot-cli", "gemini", "kiro", "opencode", "pi", "qwen", "vscode", "zcode", "fx"]) {
       assert.ok(readme.includes(`id="install-${id}">`), `README has an install block for ${id}`);
     }
     // Owner 2026-11-01: positive wording only. Prose lines (fences skipped) hold none of these words.
@@ -1808,7 +1816,7 @@ describe("ADR-0015 repo: README thesis, links and figures (D-README-THESIS-1)", 
     const proofAt = inst.indexOf("<details><summary><b>How we tested the install</b></summary>");
     assert.ok(proofAt > inst.lastIndexOf('<details id="install-'), "a closed proof block after the agent blocks");
     const proof = inst.slice(proofAt, inst.indexOf("</details>", proofAt));
-    for (const need of ["We ran the real binary", "Hooks reach each agent in one of three ways", "HOOKS-FIRE.md", "ADR-0023"]) assert.ok(proof.includes(need), `proof block lacks ${need}`);
+    for (const need of ["We ran the real binary", "Hooks reach the ten hook agents in one of three ways:", "every agent but fx gets hooks", "HOOKS-FIRE.md", "ADR-0023"]) assert.ok(proof.includes(need), `proof block lacks ${need}`);
     const sec = readme.slice(readme.indexOf("\n## Security and privacy\n"), readme.indexOf("\n## Context Mode Gateway\n"));
     assert.ok(sec.includes("\n| Call | When | File |\n"), "network calls are a table");
     for (const f of ["src/core/sandbox/fetch.ts", "src/core/ops/doctor-env.ts", "src/cli/commands.ts"]) assert.ok(sec.includes(`](${f})`), `Security links ${f}`);

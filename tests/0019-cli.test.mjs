@@ -16,6 +16,11 @@ import { isEntry } from "../src/entries/is-entry.ts";
 
 // Serial: tests share one scratch dir and one built package from before(); every CLI call is spawnSync, which blocks the event loop.
 describe("ADR-0019 cli", () => {
+  test("setup accepts the fx MCP client", async () => {
+    const { parseFlags } = await import("../src/cli/args.ts");
+    assert.deepEqual(parseFlags("setup", ["--agents", "fx"]).agents, ["fx"]);
+  });
+
   describe("ADR-0019 setup, doctor and CLI conventions", () => {
     // Spec: docs/architecture/adr/0019-interactive-setup-and-npm-channel.md sections 4-8 and Owner decisions D4-D7.
     // E2E style: build the real release tree once, copy the bundled cli.mjs next to a fake server.mjs and hook.mjs
@@ -613,7 +618,13 @@ describe("ADR-0019 cli", () => {
         }
         const d = run(s, ["doctor", "--agents", a.id, "--json"]);
         assert.equal(d.status, 0, d.stdout + d.stderr);
-        assert.equal(JSON.parse(d.stdout).agents.find((x) => x.id === a.id).status, "PASS");
+        const checked = JSON.parse(d.stdout).agents.find((x) => x.id === a.id);
+        assert.equal(checked.status, "PASS");
+        if (a.hookChannel.kind === "none") {
+          for (const name of ["hook-registered", "hook-runs", "hook-seen"]) {
+            assert.equal(checked.checks.find((c) => c.name === name).warn, true, `${a.id}: ${name}`);
+          }
+        }
       });
     }
 

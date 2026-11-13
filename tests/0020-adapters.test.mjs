@@ -4,6 +4,7 @@
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { hookHostRows } from "./_lib/hook-hosts.mjs";
 import { ADAPTERS, getAdapter } from "../src/adapters/table.ts";
 import { AGENT_IDS } from "../src/core/contracts/agents.ts";
 import * as claudeCode from "../src/adapters/claude-code.ts";
@@ -55,12 +56,14 @@ describe("ADR-0020 adapters", () => {
       zcode: ["hooks+mcp", "spawn-cwd", "mcp__context-mode__", "sessionstart", "none", 5000, "deny-reason"],
       pi: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", 0, "deny-reason"],
       opencode: ["in-process", "spawn-cwd", "", "opencode-cache", "none", 0, "deny-reason"],
+      fx: ["mcp-entry", "spawn-cwd", "mcp_context-mode_", "none", "none", 5000, "hint-only"],
     };
 
     const CLAUDE_NATIVE = { shell: ["Bash"], read: ["Read"], grep: ["Grep"], webfetch: ["WebFetch"], edit: ["Write", "Edit", "NotebookEdit"] };
     // impl/10 §1.3a; zcode = Claude names per DECISIONS-r9 R4 and impl/00 §3.1 (DEVIATIONS D-M3-A7-1).
     // #1212: Claude Code's PowerShell tool (tool_name "PowerShell", input {command}) is a shell tool too (D-CC-PWSH-1).
     const NATIVE = {
+      fx: { shell: ["shell"], read: ["read_file"], grep: ["grep_files"] },
       "claude-code": { ...CLAUDE_NATIVE, shell: ["Bash", "PowerShell"] },
       codex: { shell: ["Bash"], edit: ["apply_patch"] },
       gemini: { shell: ["run_shell_command"], read: ["read_file"], grep: ["grep_search"], webfetch: ["web_fetch"] }, // gemini-cli 0.65.0 *_TOOL_NAME
@@ -76,6 +79,7 @@ describe("ADR-0020 adapters", () => {
     const CLAUDE_EVENTS = { SessionStart: "SessionStart", UserPromptSubmit: "UserPromptSubmit", PreToolUse: "PreToolUse", PostToolUse: "PostToolUse" };
     // impl/10 §1.4; vscode PreCompact per DEVIATIONS D-M3-A4-1.
     const EVENTS = {
+      fx: {},
       "claude-code": CLAUDE_EVENTS,
       codex: CLAUDE_EVENTS,
       gemini: { UserPromptSubmit: "BeforeAgent", PreToolUse: "BeforeTool", PostToolUse: "AfterTool", PreCompact: "PreCompress" },
@@ -250,8 +254,9 @@ describe("ADR-0020 adapters", () => {
       opencode: { kind: "home-dir", path: ".config/opencode/skills" },
     };
 
+    // The fx row (ADR-0026, proposed) has no hook channel; tests/0026-fx-mcp-client.test.mjs covers it.
     test("every row has a hookChannel and a skillChannel with a non-empty path (ADR-0020, no exception rows)", () => {
-      for (const id of AGENT_IDS) {
+      for (const { id } of hookHostRows()) {
         const r = getAdapter(id);
         assert.ok(r.hookChannel && typeof r.hookChannel.path === "string" && r.hookChannel.path.length > 0, id + " hookChannel");
         assert.ok(r.skillChannel && typeof r.skillChannel.path === "string" && r.skillChannel.path.length > 0, id + " skillChannel");
@@ -305,6 +310,7 @@ describe("ADR-0020 adapters", () => {
         zcode: ["hooks+mcp", "spawn-cwd", "mcp__context-mode__", "sessionstart", "none", "deny-reason"],
         pi: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", "deny-reason"],
         opencode: ["in-process", "spawn-cwd", "", "opencode-cache", "none", "deny-reason"],
+        fx: ["mcp-entry", "spawn-cwd", "mcp_context-mode_", "none", "none", "hint-only"],
       };
       for (const r of ADAPTERS) {
         assert.deepEqual(
@@ -1965,6 +1971,7 @@ describe("ADR-0020 adapters", () => {
     });
   });
 
+
   // D-HOST-SCHEMAS-1: tests/fixtures/host-schemas/<agent>.json holds each host's own hook reply rules, read from the host
   // source named in the file. Every encode reply on representative events must be empty or valid for its host and event.
   describe("ADR-0020 host reply shapes (tests/fixtures/host-schemas)", () => {
@@ -1981,13 +1988,13 @@ describe("ADR-0020 adapters", () => {
     ];
 
     test("every agent has a host-schemas file with a reply schema for each of the four events", () => {
-      for (const id of AGENT_IDS) {
+      for (const { id } of hookHostRows()) {
         for (const event of Object.keys(events)) assert.ok(HOST_SHAPES[id].output[event] !== undefined, `${id} ${event}`);
       }
     });
 
     test("every encode reply of every agent is empty or valid for its host's reply schema", () => {
-      for (const id of AGENT_IDS) {
+      for (const { id } of hookHostRows()) {
         for (const [event, ev] of Object.entries(events)) {
           for (const d of decisions) {
             if (d.kind === "deny" && event !== "PreToolUse") continue; // deny is a PreToolUse decision only (policy/decide.ts, dispatch caseB)
