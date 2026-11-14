@@ -1,9 +1,9 @@
 // src/setup/print.ts: `context-mode setup --print <id>`, the manual step for one agent with absolute paths filled
 // in (owner 2026-10-25: users never type paths, JSON or scripts). Built from the same registry row setup applies,
 // so the printed step and the applied step cannot drift. Writes nothing.
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 
-import { editHostConfigText, ownMcpKey, parseHostConfig } from "../core/ops/host-config.ts";
+import { editHostConfigText, ownMcpKey, parseHostConfig, readFxProfile } from "../core/ops/host-config.ts";
 import { hostText } from "../core/ops/host-text.ts";
 import { codexTrustEntries } from "./codex-trust.ts";
 import { configEdits, renderSkill } from "./registry.ts";
@@ -34,7 +34,9 @@ export function shellWord(s: string): string {
 // already uses, so following "add the context-mode entry and keep the rest" never leaves our entry where fx skips it.
 function fxPrintKey(file: string, format: NonNullable<CheckRow["config"]>["format"], key: readonly string[]): readonly string[] {
   try {
-    return existsSync(file) ? ownMcpKey("fx", parseHostConfig("fx", file, hostText(readFileSync(file, "utf8")), format)) : key;
+    // Manual repair can retain the container choice of a BOM-prefixed profile; setup itself still refuses that BOM.
+    const raw = readFxProfile(file, { allowBom: true });
+    return raw === undefined ? key : ownMcpKey("fx", parseHostConfig("fx", file, hostText(raw.toString("utf8")), format));
   } catch {
     return key;
   }

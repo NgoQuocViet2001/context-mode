@@ -1025,6 +1025,8 @@ export const HOOK_UNAVAILABLE_DETAIL = (agent: AgentId): string => `${agent} CLI
 export const FX_CONFIG_TIMEOUT_MS = 10_000; // fx mcp --help and fx mcp list return without starting a server
 export const FX_SHOW_TIMEOUT_MS = 35_000; // fx mcp show gives a server 30 s to start (fx src/core/mcp/mcp_contract.zig)
 export const FX_CONFIG_MAX_BYTES = 1024 * 1024;
+// The native list repeats source/path/status metadata for every server; its output can exceed the profile's size.
+export const FX_LIST_MAX_BYTES = 16 * 1024 * 1024;
 // fx reads at most 1 MiB of mcp.json and parses the bytes as they are, so a BOM fails (fx src/builtins/mcp.zig readProfile).
 export const FX_PROFILE_MAX_BYTES = 1024 * 1024;
 // fx cancels an MCP call that sends nothing for operation_timeout_ms (fx 0.0.16 default 60000, src/core/mcp/mcp_contract.zig);
@@ -1070,6 +1072,8 @@ export const FX_START_FIX = (file: string): string => `add the entry that contex
 export const FX_PATH_UNAVAILABLE = "fx is not on PATH, so fx did not check the context-mode entry";
 export const FX_NOT_AGENT = "the fx on PATH is not the fx coding agent, so fx did not check the context-mode entry";
 export const FX_CONFIG_LIST_FAILED = "fx mcp list --json failed, so fx could not read its profile";
+export const FX_LIST_OUTPUT_LIMIT = "fx mcp list --json output exceeded the verification limit";
+export const FX_LIST_OUTPUT_FIX = "inspect fx mcp list --json directly and reduce unrelated server entries before retrying";
 export const FX_CONFIG_REJECTED = (file: string): string => `fx did not load the context-mode entry in ${file}`;
 export const FX_CONFIG_LIST_INVALID = "fx mcp list --json did not return a server list";
 export const FX_MCP_START_FAILED = "fx could not start the context-mode server";

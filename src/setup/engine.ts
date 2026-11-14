@@ -23,7 +23,7 @@ import type { AgentId, HostConfigFormat, V1Finding } from "../core/contracts/typ
 import { detectV1 } from "../core/ops/detect-v1.ts";
 import { isNativeOpencodeEntry, OPENCODE_PACKAGE_DIR_HINT, opencodeDirPlugin, opencodeDirPlugins, opencodePluginDirs, opencodeProjectDir } from "../core/ops/doctor-config.ts";
 import { atomicWriteFile, renameWithRetry, unlinkWithRetry } from "../core/ops/atomic-file.ts";
-import { fxMcpConfigEdits, editHostConfigText, hostConfigValueAt, parseHostConfig } from "../core/ops/host-config.ts";
+import { fxMcpConfigEdits, readFxProfile, editHostConfigText, hostConfigValueAt, parseHostConfig } from "../core/ops/host-config.ts";
 import { checkFxMcp, detectFx } from "../core/ops/fx-config-check.ts";
 import { OMP_DISABLED_SERVERS_KEY, ompImportFiles, ompImportsUs } from "../core/ops/omp-import.ts";
 import { hostLayout, hostText, withLayout } from "../core/ops/host-text.ts";
@@ -141,7 +141,10 @@ function runBin(bin: string, args: string[], env: SetupContext["env"], input?: s
 }
 
 /** CC-WIN-3: host file text as plain LF without a BOM (PowerShell 5 writes both); apply gives the layout back. */
-function readOr(file: string): string | undefined { return existsSync(file) ? hostText(readFileSync(file, "utf8")) : undefined; }
+function readOr(file: string, agent?: AgentId): string | undefined {
+  const raw = agent === "fx" ? readFxProfile(file)?.toString("utf8") : readRaw(file);
+  return raw === undefined ? undefined : hostText(raw);
+}
 /** The bytes as they are: backups, and files that are rendered whole (skills). */
 function readRaw(file: string): string | undefined { return existsSync(file) ? readFileSync(file, "utf8") : undefined; }
 
@@ -404,7 +407,7 @@ function planRow(row: CheckRow, listed: boolean, stale: boolean, env: SetupConte
   const edits: FileEdit[] = [];
   if (row.config) {
     const c = row.config;
-    const before = readOr(c.file);
+    const before = readOr(c.file, row.id);
     let res;
     try { res = editHostConfigText(row.id, c.file, before ?? "", c.format, ownConfigEdits(row, c, before ?? "")); }
     catch (e) { if (e instanceof CtxError) throw new Error(parseFail(row, c.file)); throw e; }
@@ -713,10 +716,13 @@ function parseCheck(row: CheckRow): Check {
   const c = row.config;
   if (!c) return { name: "parse", ok: true };
   try {
-    const text = readOr(c.file) ?? "";
+    const text = readOr(c.file, row.id) ?? "";
     const r = editHostConfigText(row.id, c.file, text, c.format, ownConfigEdits(row, c, text));
     return { name: "parse", ok: r.edits.length === 0, detail: r.edits.length ? "entry differs after write" : undefined };
-  } catch (e) { return { name: "parse", ok: false, detail: (e as Error).message }; }
+  } catch (e) {
+    const fix = (e as { fix?: unknown }).fix;
+    return { name: "parse", ok: false, detail: (e as Error).message, ...(typeof fix === "string" ? { fix } : {}) };
+  }
 }
 
 /** ADR-0020 hook-registered: the host channel holds our entry. A file or plugin-list channel is planned again (no
@@ -1364,7 +1370,7 @@ async function setupRow(row: CheckRow, ctx: SetupContext, run: Run, dryRun: bool
   try {
     for (const e of plan.edits) {
       assertWritable(row, e.file);
-      const raw = readRaw(e.file); // the backup holds the bytes as they were, BOM and CRLF included
+      const raw = row.id === "fx" && e.file === row.config?.file ? readFxProfile(e.file)?.toString("utf8") : readRaw(e.file); // backup keeps the original bytes
       run.record({ agent: row.id, file: e.file, existed: raw !== undefined }, raw);
       atomicWrite(e.file, e.plain || raw === undefined ? e.after : withLayout(e.after, hostLayout(raw)), e.file === row.config?.file ? OWN_MCP_ENTRY[row.id]?.permissions ?? {} : {});
     }

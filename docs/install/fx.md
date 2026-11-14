@@ -56,7 +56,8 @@ It puts each touched file back as it was before setup, so a server added to `~/.
 - No hook, so nothing redirects or replaces a large `shell`, `read_file` or `grep_files` result, and nothing is injected at compaction. The model picks `ctx_execute` on its own, and the fx system prompt says a listed server is not a reason to use MCP.
 - fx passes only `HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM` and `USER` to the server, plus the entry's env map (`environment`, or `env` when there is no `environment`). A command run through `ctx_execute` sees those, `PWD` and the color settings `ctx_execute` adds. Add any other variable to that map.
 - fx does not read `disable-model-invocation` in a skill file, so the model can call the three skills on its own.
-- fx reads `~/.fx/mcp.json` as stored: up to 1 MiB, and a file that starts with a UTF-8 byte order mark fails. fx also skips an entry whose `required`, `startup_timeout_ms` or `restart_limit` value it does not accept. Setup refuses these before any write, with or without fx on PATH, and the `Fix:` line names the file.
+- fx reads `~/.fx/mcp.json` as stored: up to 1 MiB, with valid UTF-8 and no byte order mark or unpaired Unicode escapes. fx also skips an entry whose `required`, `startup_timeout_ms` or `restart_limit` value it does not accept. Setup refuses these before any write, with or without fx on PATH, and the `Fix:` line names the file.
+- The native `fx mcp list --json` check allows up to 16 MiB of output: each listed server repeats its profile path and status, so the output can be larger than the profile. Exceeding this bound reports a verification-output limit, not an invalid profile. No server is started when this check fails.
 
 ## Report a problem
 

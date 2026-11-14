@@ -2,7 +2,8 @@
 // #849 .jsonc wins, #808 string-aware comment strip), TECH-SPEC §3.11; DEVIATIONS D-M5-O1-1..4.
 // No regex: every parse below is a character scanner. JSON/JSONC edits touch only the edited value span,
 // so comments and untouched text survive byte for byte.
-import { existsSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync } from "node:fs";
+import { isUtf8 } from "node:buffer";
 import { dirname, join } from "node:path";
 import { getStaticTOMLValue, parseTOML } from "toml-eslint-parser";
 import type { AST } from "toml-eslint-parser";
@@ -41,7 +42,7 @@ export function readHostConfig(agent: AgentId, path: string): HostConfigText {
     const jsonc = join(dirname(path), OPENCODE_CONFIG_FILES[0]);
     if (existsSync(jsonc)) file = jsonc;
   }
-  const raw = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const raw = agent === "fx" ? readFxProfile(file)?.toString("utf8") ?? "" : existsSync(file) ? readFileSync(file, "utf8") : "";
   return { agent, text: hostText(raw), format: agent === "opencode" && !file.endsWith(TOML_EXT) ? "jsonc" : formatOf(file), path: file, layout: hostLayout(raw) }; // CC-WIN-3: BOM and CRLF off for parsing
 }
 
@@ -236,17 +237,29 @@ export function tomlHeaderText(path: readonly string[]): string {
   return "[" + path.map(tomlHeaderKey).join(".") + "]";
 }
 
-// fx's native JSON parser rejects duplicate keys, whereas JSON.parse keeps the last.
-// Check the parsed scanner tree only for fx so an edited document cannot be a host-invalid false PASS.
-function assertUniqueKeys(node: Node): void {
+// fx's JSON parser rejects unpaired Unicode surrogates; JSON.parse accepts them.
+function assertFxString(value: string): void {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const low = value.charCodeAt(++i);
+      if (!(low >= 0xdc00 && low <= 0xdfff)) throw new SyntaxError("unpaired Unicode surrogate");
+    } else if (code >= 0xdc00 && code <= 0xdfff) throw new SyntaxError("unpaired Unicode surrogate");
+  }
+}
+
+// Check only fx: its parser rejects repeated keys and malformed Unicode strings that JSON.parse accepts.
+function assertFxJson(node: Node, text: string): void {
   if (node.kind === "object") {
     const seen = new Set<string>();
     for (const member of node.members) {
+      assertFxString(member.key);
       if (seen.has(member.key)) throw new SyntaxError("duplicate JSON key");
       seen.add(member.key);
-      assertUniqueKeys(member.node);
+      assertFxJson(member.node, text);
     }
-  } else if (node.kind === "array") for (const item of node.items) assertUniqueKeys(item);
+  } else if (node.kind === "array") for (const item of node.items) assertFxJson(item, text);
+  else if (text[node.start] === '"') assertFxString(JSON.parse(text.slice(node.start, node.end)) as string);
 }
 
 // ------------------------------------------------------------------------------------------ parse API
@@ -256,7 +269,7 @@ export function parseHostConfig(agent: AgentId, path: string, text: string, form
   try {
     if (format === "toml") return scanToml(text).value;
     const doc = scanJson(text, format);
-    if (agent === "fx" && doc.root !== null) assertUniqueKeys(doc.root);
+    if (agent === "fx" && doc.root !== null) assertFxJson(doc.root, doc.clean);
     return doc.value;
   } catch {
     throw new CtxError("CONFIG_PARSE_FAILED", { agent, path, format });
@@ -478,13 +491,38 @@ export function fxMcpEntryIssue(entry: unknown, file: string): FxIssue | undefin
   return undefined;
 }
 
-/** A profile fx cannot read as it is on disk: over FX_PROFILE_MAX_BYTES or with a UTF-8 BOM. An absent file has none. */
+/** Read at most the fx profile limit plus one byte, including if the file grows after fstat. Never decode invalid
+ *  UTF-8 into replacement characters: setup and remove must keep the original bytes. An absent file has no bytes. */
+export function readFxProfile(file: string, options: { allowBom?: boolean } = {}): Buffer | undefined {
+  let fd: number | undefined;
+  try {
+    fd = openSync(file, "r");
+    if (fstatSync(fd).size > FX_PROFILE_MAX_BYTES) throw fxRefusal({ detail: FX_CONFIG_TOO_LARGE(file), fix: FX_SIZE_FIX(file) });
+    const raw = Buffer.allocUnsafe(FX_PROFILE_MAX_BYTES + 1);
+    let length = 0;
+    while (length < raw.length) {
+      const n = readSync(fd, raw, length, raw.length - length, null);
+      if (n === 0) break;
+      length += n;
+    }
+    if (length > FX_PROFILE_MAX_BYTES) throw fxRefusal({ detail: FX_CONFIG_TOO_LARGE(file), fix: FX_SIZE_FIX(file) });
+    const bytes = raw.subarray(0, length);
+    if (!options.allowBom && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) throw fxRefusal({ detail: FX_CONFIG_BOM(file), fix: FX_BOM_FIX(file) });
+    if (!isUtf8(bytes)) throw fxRefusal({ detail: FX_CONFIG_PARSE(file), fix: FX_PROFILE_FIX(file) });
+    return bytes;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    if (typeof (e as { fix?: unknown }).fix === "string") throw e;
+    throw fxRefusal({ detail: FX_CONFIG_PARSE(file), fix: FX_PROFILE_FIX(file) });
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/** A profile fx cannot read as stored. Callers that need its text use readFxProfile without an unbounded reread. */
 export function fxProfileBytesIssue(file: string): FxIssue | undefined {
-  let raw: Buffer;
-  try { raw = readFileSync(file); } catch { return undefined; }
-  if (raw.length > FX_PROFILE_MAX_BYTES) return { detail: FX_CONFIG_TOO_LARGE(file), fix: FX_SIZE_FIX(file) };
-  if (raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf) return { detail: FX_CONFIG_BOM(file), fix: FX_BOM_FIX(file) };
-  return undefined;
+  try { readFxProfile(file); return undefined; }
+  catch (e) { return { detail: (e as Error).message, fix: (e as Error & { fix: string }).fix }; }
 }
 
 /** A profile setup cannot write into: not an object, or the container that holds our entry is not an object. */

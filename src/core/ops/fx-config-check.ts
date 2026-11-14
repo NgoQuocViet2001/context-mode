@@ -4,7 +4,7 @@ import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   FX_CONFIG_LIST_FAILED, FX_CONFIG_LIST_INVALID, FX_CONFIG_MAX_BYTES, FX_CONFIG_REJECTED, FX_CONFIG_TIMEOUT_MS, FX_LIST_FIX, FX_START_FIX,
-  FX_HELP_PREFIX, FX_LIST_IDLE, FX_LIST_SOURCE, FX_LIST_TRANSPORT, FX_MCP_NOT_READY, FX_MCP_RESULT_INVALID,
+  FX_HELP_PREFIX, FX_LIST_IDLE, FX_LIST_SOURCE, FX_LIST_TRANSPORT, FX_LIST_MAX_BYTES, FX_LIST_OUTPUT_LIMIT, FX_LIST_OUTPUT_FIX, FX_MCP_NOT_READY, FX_MCP_RESULT_INVALID,
   FX_MCP_START_FAILED, FX_NOT_AGENT, FX_PATH_UNAVAILABLE, FX_PROFILE_FIX, FX_SHOW_READY, FX_SHOW_TIMEOUT_MS, SERVER_KEY,
 } from "../contracts/constants.ts";
 import { spawnShim, whichBin } from "../../setup/spawn-bin.ts";
@@ -53,7 +53,8 @@ export function checkFxConfig(env: NodeJS.ProcessEnv, cwd: string, file: string)
 }
 
 function checkConfig(bin: string, env: NodeJS.ProcessEnv, cwd: string, file: string): FxConfigCheck {
-  const result = spawnShim(bin, ["mcp", "list", "--json"], env, { ...limits, cwd });
+  const result = spawnShim(bin, ["mcp", "list", "--json"], env, { ...limits, maxBuffer: FX_LIST_MAX_BYTES, cwd });
+  if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOBUFS") return { ok: false, detail: FX_LIST_OUTPUT_LIMIT, fix: FX_LIST_OUTPUT_FIX };
   if (result.error || result.status !== 0) return { ok: false, detail: FX_CONFIG_LIST_FAILED, fix: FX_PROFILE_FIX(file) };
   try {
     const parsed = JSON.parse(String(result.stdout));
