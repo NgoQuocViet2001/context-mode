@@ -640,7 +640,7 @@ describe("ADR-0013 repo: scheduled workflows", () => {
   });
 
   // ADR-0026 M7 (D-OMP-CI-1): the real OMP 18.20.0 from its own install script on all 3 OS, before the v2 unit tests
-  // (the omp fire block in tests/0020-fire-plugin-ext) and with a step for the OMP e2e cases.
+  // (the omp fire block in tests/0020-fire-omp) and with a step for the OMP e2e cases.
   test("ci.yml: OMP 18.20.0 installs with its own script on every OS, omp --version gates it, OMP fire and e2e cases run (D-OMP-CI-1)", () => {
     const l = lines(read(".github/workflows/ci.yml"));
     const unix = l.indexOf("- name: omp 18.20.0 (native install script) for the omp fire tests (D-OMP-CI-1)");
@@ -662,6 +662,17 @@ describe("ADR-0013 repo: scheduled workflows", () => {
 
   // D-OMP-CI-2: the windows-hosts job runs the omp row (setup, doctor) of e2e/checks/windows-hosts.mjs, so it installs
   // OMP 18.20.0 with OMP's own script too (first main run 120ac299: omp setup + doctor "omp not on PATH" on ubuntu).
+  // D-OMP-CI-3: the OMP fire block runs spawnSync (build, plugin link). In the shared process it blocked the 10 s MCP timer of the
+  // VS Code setup check (CI run 43592877865). It runs in its own test file, so two processes share the load.
+  test("the OMP fire block lives in its own test file, not in the plugin-and-extension fire file (D-OMP-CI-3)", () => {
+    const shared = readRoot("tests/0020-fire-plugin-ext.test.mjs");
+    const own = readRoot("tests/0020-fire-omp.test.mjs");
+    assert.ok(own.includes('describe("ADR-0020 fire, OMP host"'), "own file holds the OMP describe");
+    assert.ok(own.includes('"D-OMP-FIRE-1 (T38)'), "own file holds the T38 test");
+    assert.ok(!shared.includes("ADR-0020 fire omp"), "shared file has no OMP describe");
+    assert.ok(!shared.includes('spawnSync("omp"'), "shared file never spawns omp");
+  });
+
   test("ci.yml: the windows-hosts job installs OMP 18.20.0 with its own script before the 11-agent matrix (D-OMP-CI-2)", () => {
     const l = lines(read(".github/workflows/ci.yml"));
     const job = l.indexOf("windows-hosts:");

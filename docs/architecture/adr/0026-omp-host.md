@@ -198,7 +198,7 @@ Each step: red test -> green -> profile (before/after) -> push `lane/r64-omp` ->
 | M4 | `omp` AgentId, table row, constants, manifest `omp` key, wrapper, skills, host lists | `src/core/contracts/agents.ts:2`, `src/adapters/table.ts:98-106,117,142`, `src/core/contracts/constants.ts:373,628-630,718-719,751,838,1096`, `src/core/contracts/client-map.ts:37-42`, `src/core/project/resolve.ts:43-44,64`, `src/core/ops/doctor-hook.ts:86-88`, `build/manifests.ts:229-253,284`, `build/build.mjs:252-264` | T15-T22 | D-OMP-ROW-1, D-OMP-MANIFEST-1, D-OMP-SKILLS-1 |
 | M5 | Setup and uninstall with `omp plugin` verbs | `src/setup/registry.ts:47,247,261-270`, `src/setup/engine.ts:1178`, `src/core/ops/uninstall.ts:145-150` | T23-T26 | D-OMP-SETUP-1 |
 | M6 | Doctor rows, fix lines, `ctx_upgrade`, MCP-import info | `src/core/tools/doctor.ts:184-185`, `src/core/ops/host-write.ts:28-38`, `src/core/project/config-dir.ts:147`, `src/core/ops/plugin-root.ts:186-193`, `src/core/tools/upgrade.ts:49-63` | T27-T35 | D-OMP-DOCTOR-1, D-OMP-UPGRADE-1 |
-| M7 | Live OMP fire block, e2e cases, CI job on 3 OS | `tests/0020-fire-plugin-ext.test.mjs:162`, `e2e/cases/GP2-prompt-surface.e2e.mjs:172`, `e2e/cases/GP3-hooks.e2e.mjs`, `e2e/cases/GP11-doctor-upgrade.e2e.mjs:64`, `.github/workflows/ci.yml:88-96,189-190` | T36-T51 | D-OMP-FIRE-1, D-OMP-CI-1 |
+| M7 | Live OMP fire block, e2e cases, CI job on 3 OS | `tests/0020-fire-omp.test.mjs:162`, `e2e/cases/GP2-prompt-surface.e2e.mjs:172`, `e2e/cases/GP3-hooks.e2e.mjs`, `e2e/cases/GP11-doctor-upgrade.e2e.mjs:64`, `.github/workflows/ci.yml:88-96,189-190` | T36-T51 | D-OMP-FIRE-1, D-OMP-CI-1 |
 | M8 | Docs: 10 -> 11 agents, `docs/install/omp.md`, issue forms | `build/check-install-docs.mjs:160`, docs list below | T52 | D-OMP-DOCS-1 |
 | M9 | Beta for @tejasach06 @itsmylife44 @jeffscottward from the lane build | - | their `ctx_doctor` output | - |
 
@@ -253,7 +253,7 @@ Doctor and upgrade (`tests/0010-doctor-upgrade.test.mjs` [cm `docs/architecture/
 - T34: MCP import on and `disabledServers` without us -> info line with the file name and the fix.
 - T35: Pi fixture -> doctor and upgrade output equal `fea7780d` (golden).
 
-Live fire, `tests/0020-fire-plugin-ext.test.mjs` [cm `docs/architecture/TEST-LAYOUT.md:57`], OMP block next to the Pi block [cm `tests/0020-fire-plugin-ext.test.mjs:162,171`], skipped when `omp` is absent. Fixtures: the proof harness moved into the test (fake OpenAI-compatible model on port 0, first reply = one tool call picked by a prompt keyword, second = text that echoes the last tool message, a request with no tools = summary text; it saves each request). Temp HOME, `startup.setupWizard: false` in `config.yml` [src `modes/settings.ts:1270-1280`], `< /dev/null` in print mode, package installed with `omp plugin link <built dir>` [run `omp-r65-config.md` manifest test]:
+Live fire, `tests/0020-fire-omp.test.mjs` [cm `docs/architecture/TEST-LAYOUT.md:58`], own file since D-OMP-CI-3, skipped when `omp` is absent. Fixtures: the proof harness moved into the test (fake OpenAI-compatible model on port 0, first reply = one tool call picked by a prompt keyword, second = text that echoes the last tool message, a request with no tools = summary text; it saves each request). Temp HOME, `startup.setupWizard: false` in `config.yml` [src `modes/settings.ts:1270-1280`], `< /dev/null` in print mode, package installed with `omp plugin link <built dir>` [run `omp-r65-config.md` manifest test]:
 
 - T36: print `"hi"` -> system holds the RFC 2119 base, `<project-context>`, AGENTS.md, then the payload once (today 592 chars).
 - T37: tools in request 1 = 11 built-ins + 9 `ctx_*`; `ctx_stats` call returns the stats table.
@@ -283,7 +283,7 @@ Total: 52 tests (T1-T52) in 15 existing files (10 under `tests/`, 4 GP files und
 The `ci` matrix already runs macOS, Ubuntu and Windows. OMP installs with its own script, pinned, unattended, into `runner.temp` [src `scripts/install.sh:6,20`, `scripts/install.ps1:18-21,36`; run `omp-r65-platform.md` §3: exit 0 in 10.4 s, HOME untouched]. `irm | iex` cannot pass flags, so Windows uses the scriptblock form of the same script. The download host can fail; each step retries 3 times, and `omp --version` then fails the job, so a missing `omp` never turns into a silent skip in CI.
 
 ```yaml
-      # D-OMP-CI-1: the real OMP 18.20.0 on all 3 OS for the omp fire tests (tests/0020-fire-plugin-ext).
+      # D-OMP-CI-1: the real OMP 18.20.0 on all 3 OS for the omp fire tests (tests/0020-fire-omp).
       # OMP's own install script, prebuilt binary, SHA-256 checked by the script. Temp dir, no login, no key.
       - name: omp 18.20.0 (native install script) for the omp fire tests (D-OMP-CI-1)
         if: runner.os != 'Windows'
@@ -336,7 +336,7 @@ Method: median of 50 runs (p90 too), same machine, temp HOME, warm cache, runs i
 | D-OMP-SETUP-1 | `src/setup/registry.ts`, `src/setup/engine.ts`, `src/core/ops/uninstall.ts`, `tests/0019-setup-engine.test.mjs` | Setup and uninstall use `omp plugin` verbs; `disabledServers` only when OMP imports us. |
 | D-OMP-DOCTOR-1 | `doctor.ts`, `doctor-config.ts`, `config-dir.ts`, `tests/0010-doctor-upgrade.test.mjs` | Doctor names OMP, reads the OMP lock file, prints OMP verbs. |
 | D-OMP-UPGRADE-1 | `upgrade.ts`, `host-write.ts`, `plugin-root.ts`, `tests/0010-doctor-upgrade.test.mjs` | `ctx_upgrade` on OMP writes nothing under `~/.pi`; plugin root = package dir. |
-| D-OMP-FIRE-1 | `tests/0020-fire-plugin-ext.test.mjs`, `e2e/cases/GP1`, `GP2`, `GP3`, `GP11` | Live OMP fire test and e2e cases. |
+| D-OMP-FIRE-1 | `tests/0020-fire-omp.test.mjs`, `e2e/cases/GP1`, `GP2`, `GP3`, `GP11` | Live OMP fire test and e2e cases. |
 | D-OMP-CI-1 | `.github/workflows/ci.yml`, `e2e/checks/windows-hosts.mjs` | OMP 18.20.0 from its own script on 3 OS. |
 | D-OMP-DOCS-1 | `docs/install/*`, ADR-0023, PRD, TECH-SPEC, `12-plugins.md`, issue forms | OMP install docs with OMP's verbs; 10 -> 11 agents. |
 

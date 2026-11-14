@@ -94,7 +94,7 @@ jobs:
       - run: echo "CM_OPENCODE2_DIR=${{ runner.temp }}/opencode2" >> "$GITHUB_ENV"
         name: CM_OPENCODE2_DIR
         shell: bash
-      # D-OMP-CI-1 (ADR-0026 M7): the real OMP 18.20.0 on all 3 OS for the omp fire tests (tests/0020-fire-plugin-ext).
+      # D-OMP-CI-1 (ADR-0026 M7): the real OMP 18.20.0 on all 3 OS for the omp fire tests (tests/0020-fire-omp).
       # OMP's own install script, prebuilt binary, SHA-256 checked by the script. Temp dir, no login, no key.
       # The download host can fail: 3 tries, then omp --version fails the job, so a missing omp is never a silent skip.
       - name: omp 18.20.0 (native install script) for the omp fire tests (D-OMP-CI-1)
