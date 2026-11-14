@@ -55,6 +55,7 @@ describe("ADR-0020 adapters", () => {
       kiro: ["mcp-entry", "arg:--agent+cwd", "mcp_context_mode_", "none", "none", 5000, "hint-only"], // D-R33-KIRO-NAMES-1
       zcode: ["hooks+mcp", "spawn-cwd", "mcp__context-mode__", "sessionstart", "none", 5000, "deny-reason"],
       pi: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", 0, "deny-reason"],
+      omp: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", 0, "deny-reason"], // ADR-0026 D-OMP-ROW-1
       opencode: ["in-process", "spawn-cwd", "", "opencode-cache", "none", 0, "deny-reason"],
       fx: ["mcp-entry", "spawn-cwd", "mcp_context-mode_", "none", "none", 5000, "hint-only"],
     };
@@ -73,6 +74,7 @@ describe("ADR-0020 adapters", () => {
       kiro: { shell: ["execute_bash", "execute_pwsh", "shell"] }, // D-HF-KIRO-SHELL-1, D-N7-KIRO-1
       zcode: CLAUDE_NATIVE,
       pi: { shell: ["bash", "powershell"], read: ["read"] }, // D-HA-PI-NAMES-1, D-R38-PI-PWSH-1
+      omp: { shell: ["bash", "powershell"], read: ["read"] }, // ADR-0026: Pi tool names
       opencode: { shell: ["bash"], read: ["read"] }, // D-HF-OPENCODE-SHELL-1, D-R44-OC-READ-1
     };
 
@@ -89,6 +91,7 @@ describe("ADR-0020 adapters", () => {
       kiro: { SessionStart: "SessionStart", UserPromptSubmit: "UserPromptSubmit", PreToolUse: "PreToolUse", PostToolUse: "PostToolUse" },
       zcode: CLAUDE_EVENTS,
       pi: { SessionStart: "session_start", UserPromptSubmit: "input", PreToolUse: "tool_call", PostToolUse: "tool_result" },
+      omp: { SessionStart: "session_start", UserPromptSubmit: "input", PreToolUse: "tool_call", PostToolUse: "tool_result" },
       // Usage: OpenCode step-finish cost row (DEVIATIONS D-M5-arch-2).
       opencode: { SessionStart: "context", UserPromptSubmit: "prompt", PreToolUse: "execute.before", PostToolUse: "execute.after", PreCompact: "compaction", Usage: "step-finish" },
     };
@@ -128,12 +131,23 @@ describe("ADR-0020 adapters", () => {
       for (const [id, mod] of Object.entries(MODULES)) assert.equal(getAdapter(id).toolNamePrefix, mod.TOOL_NAME_PREFIX, id);
     });
 
-    test("all 10 adapters are wired to their own decode/encode (no not-built stub)", () => {
-      for (const [id, mod] of Object.entries(MODULES)) {
+    test("all 11 adapters are wired to their own decode/encode (no not-built stub); omp uses the Pi pair", () => {
+      for (const [id, mod] of Object.entries({ ...MODULES, omp: { decode: pi.decodeOmp, encode: pi.encode } })) {
         const r = getAdapter(id);
         assert.equal(r.decode, mod.decode, id + " decode");
         assert.equal(r.encode, mod.encode, id + " encode");
       }
+    });
+
+    // D-OMP-FIRE-1 (M7a live run): OMP rows in context.db carried agent "pi" because the omp row used the Pi decode,
+    // which names the agent "pi". The omp row decodes the same Pi payload and names the agent "omp"; Pi stays "pi".
+    test("D-OMP-FIRE-1: the omp row decodes the Pi payload with agent omp; the pi row keeps agent pi", () => {
+      const raw = { type: "tool_call", sessionId: "s", cwd: "/p", toolName: "read", input: { path: "a.txt" }, toolCallId: "c1" };
+      const o = getAdapter("omp").decode(raw);
+      const p = getAdapter("pi").decode(raw);
+      assert.equal(o.agent, "omp");
+      assert.equal(p.agent, "pi");
+      assert.deepEqual({ ...o, agent: "pi" }, p);
     });
 
     test("each newly wired row decodes its own native PreToolUse and encodes allow as empty stdout, exit 0", () => {
@@ -165,6 +179,25 @@ describe("ADR-0020 adapters", () => {
       assert.deepEqual(post.result, { isError: true, bytes: 3, text: "abc" });
       assert.throws(() => r.decode({ type: "turn_end" }), /pi: unknown hook event turn_end/);
       assert.throws(() => r.decode(null), /pi: hook payload is not an object/);
+    });
+
+    test("omp row: the Pi decode and encode, bare tool names, Pi native tools and events (ADR-0026 T22, D-OMP-ROW-1)", () => {
+      const omp = getAdapter("omp");
+      const p = getAdapter("pi");
+      assert.equal(omp.id, "omp");
+      assert.equal(omp.decode, pi.decodeOmp); // D-OMP-FIRE-1: the Pi decode, agent omp
+      assert.equal(omp.encode, pi.encode);
+      assert.equal(omp.checkPermission, pi.checkPermission);
+      assert.equal(omp.toolNamePrefix, "");
+      assert.equal(omp.installMode, "in-process");
+      assert.equal(omp.projectSource, "pi:ctx.cwd");
+      assert.deepEqual(omp.nativeTools, p.nativeTools);
+      assert.deepEqual(omp.eventMap, p.eventMap);
+      assert.equal(omp.compactDelivery, p.compactDelivery);
+      assert.equal(omp.denyChannel, p.denyChannel);
+      assert.deepEqual(omp.hookChannel, { kind: "in-process", path: "omp/index.js" });
+      assert.equal(CLIENT_NAME_TO_PLATFORM["omp-coding-agent"], "omp");
+      assert.ok(AGENT_IDS.includes(CLIENT_NAME_TO_PLATFORM["omp-coding-agent"]));
     });
 
     test("pi encode: allow is the empty shape; injected text is a custom-role message with a timestamp", () => {
@@ -239,6 +272,7 @@ describe("ADR-0020 adapters", () => {
       kiro: { kind: "home-file", path: ".kiro/hooks/context-mode.json" },
       zcode: { kind: "home-file", path: ".zcode/cli/config.json" },
       pi: { kind: "in-process", path: "pi/index.js" },
+      omp: { kind: "in-process", path: "omp/index.js" },
       opencode: { kind: "in-process", path: "opencode/plugin.js" },
     };
     const SKILL_CHANNEL = {
@@ -251,10 +285,11 @@ describe("ADR-0020 adapters", () => {
       kiro: { kind: "home-dir", path: ".kiro/skills" },
       zcode: { kind: "home-dir", path: ".zcode/skills" },
       pi: { kind: "package", path: "pi/skills" },
+      omp: { kind: "package", path: "skills" }, // D-OMP-SKILLS-1
       opencode: { kind: "home-dir", path: ".config/opencode/skills" },
     };
 
-    // The fx row (ADR-0026, proposed) has no hook channel; tests/0026-fx-mcp-client.test.mjs covers it.
+    // The fx row (ADR-0027, proposed) has no hook channel; tests/0027-fx-mcp-client.test.mjs covers it.
     test("every row has a hookChannel and a skillChannel with a non-empty path (ADR-0020, no exception rows)", () => {
       for (const { id } of hookHostRows()) {
         const r = getAdapter(id);
@@ -309,6 +344,7 @@ describe("ADR-0020 adapters", () => {
         kiro: ["mcp-entry", "arg:--agent+cwd", "mcp_context_mode_", "none", "none", "hint-only"], // D-R33-KIRO-NAMES-1
         zcode: ["hooks+mcp", "spawn-cwd", "mcp__context-mode__", "sessionstart", "none", "deny-reason"],
         pi: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", "deny-reason"],
+        omp: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", "deny-reason"],
         opencode: ["in-process", "spawn-cwd", "", "opencode-cache", "none", "deny-reason"],
         fx: ["mcp-entry", "spawn-cwd", "mcp_context-mode_", "none", "none", "hint-only"],
       };

@@ -639,6 +639,47 @@ describe("ADR-0013 repo: scheduled workflows", () => {
     assert.ok(l.indexOf("- run: echo \"CM_OPENCODE2_DIR=${{ runner.temp }}/opencode2\" >> \"$GITHUB_ENV\"") < i, "CM_OPENCODE2_DIR is set before the step");
   });
 
+  // ADR-0026 M7 (D-OMP-CI-1): the real OMP 18.20.0 from its own install script on all 3 OS, before the v2 unit tests
+  // (the omp fire block in tests/0020-fire-plugin-ext) and with a step for the OMP e2e cases.
+  test("ci.yml: OMP 18.20.0 installs with its own script on every OS, omp --version gates it, OMP fire and e2e cases run (D-OMP-CI-1)", () => {
+    const l = lines(read(".github/workflows/ci.yml"));
+    const unix = l.indexOf("- name: omp 18.20.0 (native install script) for the omp fire tests (D-OMP-CI-1)");
+    const win = l.indexOf("- name: omp 18.20.0 (native install script, Windows) for the omp fire tests (D-OMP-CI-1)");
+    const ver = l.indexOf("- run: omp --version");
+    const e2e = l.indexOf("- run: node --test --test-name-pattern \"/omp-\" e2e/cases/GP2-prompt-surface.e2e.mjs e2e/cases/GP3-hooks.e2e.mjs e2e/cases/GP11-doctor-upgrade.e2e.mjs");
+    const unit = l.indexOf("- run: node --test \"tests/**/*.test.mjs\"");
+    assert.ok(unix > 0 && win > 0, "both install steps");
+    assert.ok(l.slice(unix, unix + 3).includes("if: runner.os != 'Windows'"), "unix step skips Windows");
+    assert.ok(l.slice(win, win + 3).includes("if: runner.os == 'Windows'"), "Windows step runs on Windows");
+    assert.ok(l.some((x) => x.includes("https://omp.sh/install | sh -s -- --binary --ref v18.20.0")), "pinned unix script");
+    assert.ok(l.some((x) => x.includes("irm https://omp.sh/install.ps1))) -Binary -Ref v18.20.0")), "pinned Windows script");
+    assert.ok(!l.some((x) => x.includes("npm") && x.includes("omp")), "native install only, no npm for omp");
+    assert.ok(unix < ver && win < ver, "omp --version after both installs");
+    assert.ok(!l.slice(ver, ver + 3).some((x) => x.startsWith("if:") || x.startsWith("continue-on-error")), "omp --version fails the job on every OS");
+    assert.ok(ver < e2e && e2e < unit, "OMP e2e cases and the v2 unit tests run after omp --version");
+    assert.ok(!l.slice(e2e, e2e + 3).some((x) => x.startsWith("if:")), "OMP e2e cases run on every OS");
+  });
+
+  // D-OMP-CI-2: the windows-hosts job runs the omp row (setup, doctor) of e2e/checks/windows-hosts.mjs, so it installs
+  // OMP 18.20.0 with OMP's own script too (first main run 120ac299: omp setup + doctor "omp not on PATH" on ubuntu).
+  test("ci.yml: the windows-hosts job installs OMP 18.20.0 with its own script before the 11-agent matrix (D-OMP-CI-2)", () => {
+    const l = lines(read(".github/workflows/ci.yml"));
+    const job = l.indexOf("windows-hosts:");
+    const matrix = l.indexOf("- run: node e2e/checks/windows-hosts.mjs");
+    assert.ok(job > 0 && matrix > job, "windows-hosts job and its matrix step");
+    const body = l.slice(job, matrix);
+    const unix = body.indexOf("- name: omp 18.20.0 (native install script) for the omp host row (D-OMP-CI-2)");
+    const win = body.indexOf("- name: omp 18.20.0 (native install script, Windows) for the omp host row (D-OMP-CI-2)");
+    const ver = body.indexOf("- run: omp --version");
+    assert.ok(unix > 0 && win > 0, "both install steps in the windows-hosts job");
+    assert.ok(body.slice(unix, unix + 3).includes("if: runner.os != 'Windows'"), "unix step skips Windows");
+    assert.ok(body.slice(win, win + 3).includes("if: runner.os == 'Windows'"), "Windows step runs on Windows");
+    assert.ok(body.filter((x) => x.includes("https://omp.sh/install | sh -s -- --binary --ref v18.20.0")).length === 1, "pinned unix script");
+    assert.ok(body.filter((x) => x.includes("irm https://omp.sh/install.ps1))) -Binary -Ref v18.20.0")).length === 1, "pinned Windows script");
+    assert.ok(unix < ver && win < ver, "omp --version after both installs, before the matrix");
+    assert.ok(!body.slice(ver, ver + 3).some((x) => x.startsWith("if:") || x.startsWith("continue-on-error")), "omp --version fails the job on every OS");
+  });
+
   // D-RN-GEM-1: v2.0.0-next.2 smoke hung on the gemini step until the 20-minute job timeout cancelled the job, so
   // continue-on-error never applied. The tier-2 gemini step has its own short timeout.
   test("release.yml: the tier-2 gemini smoke step has its own timeout under the job timeout (D-RN-GEM-1)", () => {
@@ -1027,8 +1068,8 @@ describe("ADR-0015 repo: README agent lines", () => {
   });
 
   test("readme-agents: every host row says it has hooks, from its hookChannel in table.ts", () => {
-    const rows = agentRows().filter((r) => r.id !== "fx"); // fx (ADR-0026, proposed): the next test
-    assert.equal(rows.length, 10);
+    const rows = agentRows().filter((r) => r.id !== "fx"); // fx (ADR-0027, proposed): the next test
+    assert.equal(rows.length, 11);
     for (const r of rows) {
       const a = ADAPTERS.find((x) => x.id === r.id);
       assert.ok(a.hookChannel, `${r.id} has a hookChannel`);
@@ -1039,7 +1080,7 @@ describe("ADR-0015 repo: README agent lines", () => {
     }
   });
 
-  test("readme-agents: the fx row says hooks are unavailable (ADR-0026, proposed)", () => {
+  test("readme-agents: the fx row says hooks are unavailable (ADR-0027, proposed)", () => {
     const r = agentRows().find((x) => x.id === "fx");
     assert.equal(r.hooks, "unavailable");
     assert.equal(r.skills, "yes");
@@ -1057,9 +1098,9 @@ describe("ADR-0015 repo: README agent lines", () => {
       const text = readFileSync(path.join(REPO, rel), "utf8");
       assert.ok(!/in[- ]process/i.test(text), `${rel} still says in-process / in process`);
     }
-    assert.ok(README.includes("Hooks reach the ten hook agents in one of three ways:"), "the ten-host hook explanation stays");
+    assert.ok(README.includes("Hooks reach the eleven hook agents in one of three ways:"), "the eleven-host hook explanation stays");
     assert.ok(README.includes("every agent but fx gets hooks"), "fx MCP scope is explicit");
-    assert.ok(README.includes("plugin inside the agent (OpenCode, Pi)"), "the README sentence names the plugin inside the agent");
+    assert.ok(README.includes("plugin inside the agent (OpenCode, Pi, OMP)"), "the README sentence names the plugin inside the agent");
   });
 
   test("readme-agents: each install block ends with one generated line: Hooks ✓ · MCP ✓ · Skills ✓ with the host detail in plain words; the agent table is gone (D-README-AGENT-LINES-1, D-README-DWELL-1)", () => {
@@ -1816,7 +1857,7 @@ describe("ADR-0015 repo: README thesis, links and figures (D-README-THESIS-1)", 
     const proofAt = inst.indexOf("<details><summary><b>How we tested the install</b></summary>");
     assert.ok(proofAt > inst.lastIndexOf('<details id="install-'), "a closed proof block after the agent blocks");
     const proof = inst.slice(proofAt, inst.indexOf("</details>", proofAt));
-    for (const need of ["We ran the real binary", "Hooks reach the ten hook agents in one of three ways:", "every agent but fx gets hooks", "HOOKS-FIRE.md", "ADR-0023"]) assert.ok(proof.includes(need), `proof block lacks ${need}`);
+    for (const need of ["We ran the real binary", "Hooks reach the eleven hook agents in one of three ways:", "every agent but fx gets hooks", "HOOKS-FIRE.md", "ADR-0023"]) assert.ok(proof.includes(need), `proof block lacks ${need}`);
     const sec = readme.slice(readme.indexOf("\n## Security and privacy\n"), readme.indexOf("\n## Context Mode Gateway\n"));
     assert.ok(sec.includes("\n| Call | When | File |\n"), "network calls are a table");
     for (const f of ["src/core/sandbox/fetch.ts", "src/core/ops/doctor-env.ts", "src/cli/commands.ts"]) assert.ok(sec.includes(`](${f})`), `Security links ${f}`);
@@ -1892,7 +1933,7 @@ describe("ADR-0015 repo: README thesis, links and figures (D-README-THESIS-1)", 
     assert.ok(live, "README has the real-binary line");
     for (const n of ["Claude Code", "Codex", "Gemini CLI", "Qwen Code", "Pi", "OpenCode", "Copilot CLI", "ZCode"]) assert.ok(live.includes(n), `real-binary line names ${n}`);
     assert.ok(!live.includes("logged out") && !live.includes(" our "), "the real-binary line reads plain");
-    // Install (D-README-DWELL-1, replaces the open blocks of D-README-FIX-1): all 10 blocks closed; one short "pick your agent" line sits before them.
+    // Install (D-README-DWELL-1, replaces the open blocks of D-README-FIX-1): all 11 blocks closed; one short "pick your agent" line sits before them.
     const firstBlock = readme.indexOf("<details id=\"install-");
     assert.ok(firstBlock > 0, "the first install block is closed");
     const head = readme.slice(readme.indexOf("\n## Install\n"), firstBlock);
@@ -2118,6 +2159,17 @@ describe("ADR-0015 repo: README stats job and brand (D-README-STATS-1)", () => {
     assert.throws(() => statsJson({ npmDownloads: 1, stars: 1, readAt: "yesterday" }), /read_at/);
   });
 
+  test("readmeCountsLine: the README counts line follows stats.json every day (D-README-STATS-PUSH-1)", async () => {
+    const { readmeCountsLine } = await import("../build/readme-stats.mjs");
+    const before = "# x\n\n**33K GitHub stars · 683K npm downloads** (read 2026-11-01, [stats.json](stats.json)) · on the Hacker News front page\nend\n";
+    const after = readmeCountsLine(before, { npm_downloads: 835027, stars: 34066, read_at: "2026-11-14" });
+    assert.equal(after, "# x\n\n**34K GitHub stars · 835K npm downloads** (read 2026-11-14, [stats.json](stats.json)) · on the Hacker News front page\nend\n");
+    assert.equal(readmeCountsLine(after, { npm_downloads: 835027, stars: 34066, read_at: "2026-11-14" }), after, "same counts: same bytes");
+    assert.throws(() => readmeCountsLine("no counts line\n", { npm_downloads: 1, stars: 1, read_at: "2026-11-14" }), /counts line/);
+    const y = readRepo(".github/workflows/readme-stats.yml");
+    assert.ok(y.includes("git diff --quiet -- stats.json README.md docs/assets/readme") && y.includes("git add stats.json README.md docs/assets/readme"), "the README job commits README.md too");
+  });
+
   test("adoption history: v1 counts, traffic days, npm version split, merge by day keeps every old day (D-README-HISTORY-1)", async () => {
     // Owner 2026-11-03: "claude code kurulumunda hic npm e gerek yoksa biz claude code kurulumunlarinin stats ini nasil alacagiz?"
     // GitHub keeps traffic for 14 days only, so each day the job does not save is gone; the file keeps every day it ever read.
@@ -2173,6 +2225,10 @@ describe("ADR-0015 repo: README stats job and brand (D-README-STATS-1)", () => {
     const capture = y.slice(y.indexOf("\n  capture:"), y.indexOf("\n  readme-stats:"));
     assert.ok(capture.includes("GH_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}"), "gh api reads traffic with TRAFFIC_TOKEN");
     assert.ok(capture.includes("git add \"$F\"") && !capture.includes("README") && !capture.includes("git add ."), "capture commits the history file only");
+    // D-README-STATS-PUSH-1: capture pushes first in the same run, so the README job must rebase before it pushes.
+    const readmeJob = y.slice(y.indexOf("\n  readme-stats:"));
+    assert.ok(readmeJob.includes('git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME"'), "README job rebases on main before each push");
+    assert.ok(readmeJob.includes("for i in 1 2 3; do"), "README job retries the push 3 times");
     const ignore = y.slice(y.indexOf("paths-ignore:"), y.indexOf("workflow_dispatch:"));
     assert.ok(ignore.includes("docs/assets/readme/data/adoption-history.json"), "its own output starts no run");
     assert.ok(y.split("\n").slice(0, 8).join("\n").includes("default branch"), "header: scheduled jobs run only on the default branch");
@@ -2433,6 +2489,14 @@ describe("ADR-0014 issue intake: score, one comment, issue state stays with main
     assert.equal(score("## Notes\n\nall fine").have.report, false);
   });
 
+  // ADR-0026 M8 (D-OMP-DOCS-1): an OMP report gets the agent item on its own, so the label comes without a hand edit.
+  test("intake: an OMP version line counts as the agent item; the feature form lists omp (D-OMP-DOCS-1)", async () => {
+    const { score, AGENT_IDS } = await intake();
+    assert.ok(score("## Steps\n\n1. omp plugin install context-mode\n2. run omp\n\nOMP 18.20.0 on macOS").have.agent, "OMP 18.20.0 is the agent version");
+    assert.ok(AGENT_IDS.includes("omp"), "AGENT_IDS has omp");
+    assert.ok(readRepo(".github/ISSUE_TEMPLATE/feature.yml").includes("\n        - omp\n"), "feature.yml agent dropdown has omp");
+  });
+
   test("version, agent, Node and steps read from free text by substring and digit walk", async () => {
     const { score, versionAfter, isPlaceholder } = await intake();
     assert.ok(versionAfter("context-mode version: 2.0.0", "context-mode"));
@@ -2690,6 +2754,10 @@ describe("ADR-0014 issue flow: fixed-on-main label on push, close on release (D-
     assert.equal(agentOf(issue(1350)), "opencode");
     assert.equal(agentOf({ title: "[claude-code] hook fails", body: "" }), "claude-code");
     assert.equal(agentOf({ title: "Pi: search is slow", body: "" }), "pi");
+    // ADR-0026: OMP is the 11th agent; its issues get the OMP update command, never the Pi one.
+    assert.equal(agentOf({ title: "OMP: hook does not fire", body: "" }), "omp");
+    assert.equal(agentOf({ title: "[oh-my-pi] doctor fails", body: "" }), "omp");
+    assert.equal(agentOf({ title: "x", body: "### Agent\n\nomp\n\n### Problem\n\ny" }), "omp");
     assert.equal(agentOf({ title: "OpenCode plugin does not load", body: "" }), "opencode");
     assert.equal(agentOf({ title: "x", body: "### Agent\n\ngemini\n\n### Problem\n\ny" }), "gemini");
     assert.equal(agentOf({ title: "ctx_search misses a file", body: "### Agent config\n\n_No response_" }), null);

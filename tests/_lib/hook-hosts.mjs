@@ -4,10 +4,10 @@ import { ADAPTERS } from "../../src/adapters/table.ts";
 // instead of quietly running over fewer hosts.
 export const HOOK_HOST_IDS = Object.freeze([
   "claude-code", "codex", "gemini", "qwen", "copilot-cli",
-  "vscode", "kiro", "zcode", "pi", "opencode",
+  "vscode", "kiro", "zcode", "pi", "opencode", "omp",
 ]);
 
-/** The adapter rows of the ten hook hosts, in this order. */
+/** The adapter rows of the eleven hook hosts, in this order. */
 export function hookHostRows() {
   return HOOK_HOST_IDS.map((id) => {
     const row = ADAPTERS.find((r) => r.id === id);

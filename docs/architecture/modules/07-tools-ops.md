@@ -33,7 +33,7 @@ export function resolvePluginRoot(adapter: AdapterRow, env: NodeJS.ProcessEnv): 
 ```
 
 ### Purpose
-Single function that finds the on-disk root of the installed plugin/extension for one agent. Called by install, `ctx_upgrade`, and `ctx_doctor`'s D1/D4/D7 checks — never a per-adapter copy (ADR-0010 "one path per install mode, no fallback"; TECH-SPEC §3.11 generalizes v1's Codex-only fix #771 to all 10 agents).
+Single function that finds the on-disk root of the installed plugin/extension for one agent. Called by install, `ctx_upgrade`, and `ctx_doctor`'s D1/D4/D7 checks — never a per-adapter copy (ADR-0010 "one path per install mode, no fallback"; TECH-SPEC §3.11 generalizes v1's Codex-only fix #771 to all 11 agents).
 
 ### Inputs
 - `adapter: AdapterRow` — from `getAdapter(id)` (module `adapters`).
@@ -305,7 +305,7 @@ This order matches 00-architecture.md's file-tree listing order (`doctor.ts`, `u
 - V18 (GP10, issue #1248): `ctx_stats` called in a session with zero prior tool calls returns a reply with zero rows and `isError: false` (an empty session is valid, not an error — same pattern as D9's "0 sources, 0 chunks" above).
 - V19 (GP10, issue #950): for a known call sequence, the sum of every per-tool row's count equals the total row's count exactly; no double-count, no dropped call.
 
-## 9. fx in D3 and D5 (ADR-0026, proposed)
+## 9. fx in D3 and D5 (ADR-0027, proposed)
 
 D3 reads the fx entry where fx reads it (`mcp`, else `mcpServers`). An entry setup refuses (disabled, not stdio, a `url` with no `type`, an env value that is not a string, a `required`, `startup_timeout_ms` or `restart_limit` value fx skips the entry for), a profile that is not an object, or a profile fx cannot read (invalid JSON, a repeated key, a UTF-8 BOM, over 1 MiB) is a FAIL whose fix names that file. With the fx coding agent on PATH, `fx mcp list --json` must list the entry from that profile as a stdio server that is not started; without it, D3 is WARN. Setup and `context-mode doctor` also run `fx mcp show context-mode --json`, which must report the server ready with the nine tools. D5 is WARN on fx: it has no hook channel.
 
@@ -333,7 +333,7 @@ D3 reads the fx entry where fx reads it (`mcp`, else `mcpServers`). An entry set
 ## Changes
 
 - 2026-10-16 (DECISIONS-r9, S8): added D5's Codex-trust sub-case (R6: `"Codex hooks not trusted"` detail, status `UNKNOWN`, `--dangerously-bypass-hook-trust` is a live-harness flag only, never passed by `ctx_doctor` itself); added §8 naming the three `ctx_stats` decisions this module cites (V5 savings-from-`ctx_stats`-only, V18 zero-rows `isError:false`, V19 per-tool rows sum to total).
-- 2026-11-12 (ADR-0026, proposed): §9 fx in D3 and D5.
+- 2026-11-12 (ADR-0027, proposed): §9 fx in D3 and D5.
 
 ---
 

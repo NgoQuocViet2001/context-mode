@@ -16,15 +16,15 @@ Write them in this order: `types.ts` needs `AgentId` from `agents.ts`; `errors.t
 Exports:
 
 ```ts
-export const AGENT_IDS = ["claude-code","codex","gemini","qwen","copilot-cli","vscode","kiro","zcode","pi","opencode","fx"] as const;
+export const AGENT_IDS = ["claude-code","codex","gemini","qwen","copilot-cli","vscode","kiro","zcode","pi","opencode","omp","fx"] as const; // omp: ADR-0026
 export type AgentId = typeof AGENT_IDS[number];
 ```
 
-Source: PRD-v2 §3 (10-agent table), TECH-SPEC §2, 00-architecture §3.1. Order matches the PRD §3 table top to bottom. No other export. No function: this file is data only.
+Source: PRD-v2 §3 (agent table; ADR-0026 adds omp as the 11th), TECH-SPEC §2, 00-architecture §3.1. Order matches the PRD §3 table top to bottom. No other export. No function: this file is data only.
 
-`fx` comes last, after the PRD §3 order (ADR-0026, proposed).
+`fx` comes last, after the eleven accepted hook hosts (ADR-0027, proposed).
 
-E2E case: GP1 (install across the ten hook hosts reads this list); `tests/0026-fx-mcp-client.test.mjs` covers fx. ADR-0017 `covers`: `src/core/contracts/agents.ts`.
+E2E case: GP1 (install across the eleven hook hosts reads this list); `tests/0027-fx-mcp-client.test.mjs` covers fx. ADR-0017 `covers`: `src/core/contracts/agents.ts`.
 
 ## 2. `src/core/contracts/types.ts`
 
@@ -56,7 +56,7 @@ Rules per field, each citing its source:
 
 No type in this file has an optional field that is also used to pick between two runtime paths (P1): optionality here only ever means "this event/host does not carry this field," never "pick path A or B."
 
-E2E case: GP3 (hook payload decode into `CanonicalHookEvent` for all 10 adapters), GP4 (`ToolContext`/`ToolReply` shape), GP6 (`JournalRow`/`NewJournalRow`). ADR-0017 `covers`: `src/core/contracts/types.ts`.
+E2E case: GP3 (hook payload decode into `CanonicalHookEvent` for all 11 adapters), GP4 (`ToolContext`/`ToolReply` shape), GP6 (`JournalRow`/`NewJournalRow`). ADR-0017 `covers`: `src/core/contracts/types.ts`.
 
 ## 3. `src/core/contracts/constants.ts`
 
@@ -232,4 +232,4 @@ ADR-0017 `covers`: `src/core/contracts/errors.ts`.
 - `AdapterRow.compactSummary` row added to the field table (DECISIONS-r6 D6, https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/tickets/memory-r6/eval/results.md).
 - A-C4: `MCP_HINT_EVERY`'s env override (`CTX_MCP_HINT_EVERY`) falls back to `10` on a non-numeric or non-positive value, since Q1 names the default and the override but not its own validation rule.
 - `AdapterRow` gains `toolNamePrefix` Codex note, `nativeTools`, `execReadOnlyHint` rows; constants gain `SYNC_INDEX_MAX_BYTES`, `RATIO_SECTION_DECAY`, `MAX_CANDIDATES_TOTAL`, `SEARCH_PAGE_SIZE`, `MAX_CHUNK_BYTES`, `SNIPPET_MAX_BYTES`, `REQUIRE_SECURITY_ENV`; `ErrorCode` and the error table gain `INVALID_ARGS`, `ONE_OF_INPUT`, `SPAWN_FAILED`; §4.3 step 2 spells out the full scan algorithm for `<name>` tokens, and A-C5 states the no-nesting/no-escape rule (DECISIONS-r9).
-- 2026-11-12 (ADR-0026, proposed): `AGENT_IDS` gains `fx` at the end.
+- 2026-11-12 (ADR-0027, proposed): `AGENT_IDS` gains `fx` at the end.

@@ -20,6 +20,7 @@ body:
         - zcode
         - pi
         - opencode
+        - omp
         - fx
     validations:
       required: true

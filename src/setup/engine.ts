@@ -25,6 +25,7 @@ import { isNativeOpencodeEntry, OPENCODE_PACKAGE_DIR_HINT, opencodeDirPlugin, op
 import { atomicWriteFile, renameWithRetry, unlinkWithRetry } from "../core/ops/atomic-file.ts";
 import { fxMcpConfigEdits, editHostConfigText, hostConfigValueAt, parseHostConfig } from "../core/ops/host-config.ts";
 import { checkFxMcp, detectFx } from "../core/ops/fx-config-check.ts";
+import { OMP_DISABLED_SERVERS_KEY, ompImportFiles, ompImportsUs } from "../core/ops/omp-import.ts";
 import { hostLayout, hostText, withLayout } from "../core/ops/host-text.ts";
 import { AGENT_FLAG, BACKUP_DIR, COMMAND_SKILLS, HOOK_BUNDLE, SERVER_BUNDLE, LOCK_FILE, SKILL_FILE, assertWritable, buildRegistry, configEdits, hookCommandString, renderSkill } from "./registry.ts";
 import type { CheckRow, HookFile, HookInstall, NativePlugin, SetupContext } from "./registry.ts";
@@ -388,6 +389,17 @@ function planSkills(row: CheckRow, edits: FileEdit[]): void {
   }
 }
 
+/** ADR-0026 decision 11 (D-OMP-SETUP-1): when OMP imports a context-mode server from ~/.claude.json, OMP's own
+ *  denylist `disabledServers` in ~/.omp/agent/mcp.json gets our name (merge, every other key stays). Import off: no write. */
+function planOmpImport(row: CheckRow, edits: FileEdit[], ctx: SetupContext): void {
+  const files = ompImportFiles(ctx.home);
+  if (!ompImportsUs(files, ctx.env)) return;
+  planJsonKeys(row, edits, files.mcp, "json", (doc) => {
+    const cur = Array.isArray(doc[OMP_DISABLED_SERVERS_KEY]) ? doc[OMP_DISABLED_SERVERS_KEY] as unknown[] : [];
+    return cur.includes(SERVER_KEY) ? [] : [[[OMP_DISABLED_SERVERS_KEY], [...cur, SERVER_KEY]]];
+  });
+}
+
 function planRow(row: CheckRow, listed: boolean, stale: boolean, env: SetupContext["env"], disabled = false): Plan {
   const edits: FileEdit[] = [];
   if (row.config) {
@@ -495,8 +507,9 @@ function hostBroken(bin: string, out: string): string | undefined {
   return `${b.prefix}${b.fix} (${(lines.find((l) => l.includes(b.text)) ?? lines[0]).trim()})`;
 }
 
+type ListState = { check?: Check; status: PluginStatus; broken?: string };
 /** One run of the host list command (claude plugin list takes ~1.8 s): the list check and the plugin status share it. */
-function listState(row: CheckRow, env: SetupContext["env"]): { check?: Check; status: PluginStatus; broken?: string } {
+function listState(row: CheckRow, env: SetupContext["env"]): ListState {
   const l = row.listCommand;
   if (!l || !hostBin(l.bin, env).file) return { status: undefined };
   if (row.id === "opencode") {
@@ -1164,11 +1177,17 @@ async function enableCopilotHooks(row: CheckRow, ctx: SetupContext, run: Run): P
 }
 const isObjSetup = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
-async function verifyRow(row: CheckRow, ctx: SetupContext): Promise<Check[]> {
+/** D-OMP-DOCTOR-PERF-1: one doctor call reads the host list at most once; plan and verify share it. Never kept past the call. */
+function listOnce(row: CheckRow, env: SetupContext["env"]): () => ListState {
+  let ls: ListState | undefined;
+  return () => (ls ??= listState(row, env));
+}
+
+async function verifyRow(row: CheckRow, ctx: SetupContext, list: () => ListState = () => listState(row, ctx.env)): Promise<Check[]> {
   const env = ctx.env;
   const parse = parseCheck(row);
   const checks: Check[] = [parse];
-  const ls = listState(row, env);
+  const ls = list();
   const l = ls.check;
   if (l) checks.push(l);
   const cp = copyCheck(row, ctx.pkgDir);
@@ -1315,7 +1334,7 @@ export async function runSetup(opts: SetupOptions): Promise<SetupResult> {
   return { exitCode: agents.some((a) => a.status === "FAIL") ? 1 : 0, agents, backupDir: run.manifest ? run.dir : undefined };
 }
 
-async function setupRow(row: CheckRow, ctx: SetupContext, run: Run, dryRun: boolean): Promise<AgentResult> {
+async function setupRow(row: CheckRow, ctx: SetupContext, run: Run, dryRun: boolean, list: () => ListState = () => listState(row, ctx.env)): Promise<AgentResult> {
   const res: AgentResult = { id: row.id, status: "PASS", v1: [], changes: [], checks: [] };
   const needsBin = !row.config && row.cli;
   if (needsBin) {
@@ -1327,10 +1346,11 @@ async function setupRow(row: CheckRow, ctx: SetupContext, run: Run, dryRun: bool
   if (!row.config && !row.cli) return { ...res, status: "SKIPPED", reason: `${row.id}: no setup path in the registry` };
   let plan: Plan;
   try {
-    const ls = needsBin ? listState(row, ctx.env) : { status: undefined, check: undefined, broken: undefined };
+    const ls = needsBin ? list() : { status: undefined, check: undefined, broken: undefined };
     if (ls.broken) return { ...res, status: "SKIPPED", reason: ls.broken };
     const listed = ls.check?.ok === true;
     plan = planRow(row, listed, copyCheck(row, ctx.pkgDir)?.ok === false, ctx.env, listed && ls.status === "disabled");
+    if (row.id === "omp") planOmpImport(row, plan.edits, ctx);
   } catch (e) {
     // D-FX-MCP-1: a refusal names its own fix (an fx entry the user disabled); setup again would refuse the same way.
     const fix = (e as { fix?: unknown }).fix;
@@ -1406,7 +1426,8 @@ export async function runDoctor(opts: SetupOptions): Promise<SetupResult> {
     opts.onAgent?.(id, "start");
     const native = await nativeResult(row, ctx);
     if (native) { agents.push(native); opts.onAgent?.(id, "done", native); continue; }
-    const res = await setupRow(row, ctx, run, true);
+    const list = listOnce(row, ctx.env); // doctor writes nothing, so the list setupRow read is still true for verify
+    const res = await setupRow(row, ctx, run, true, list);
     // #1376 D-1376-CODEX-PLUGIN-CACHE-1: an entry of ours that names a server.mjs or hook.mjs that is gone (a Codex plugin
     // update replaced the version dir it pointed into) fails with that path and the fix line.
     const gone = row.id === "codex" ? missingPinnedChecks(row) : [];
@@ -1416,7 +1437,7 @@ export async function runDoctor(opts: SetupOptions): Promise<SetupResult> {
       if (res.v1.some((f) => !UPGRADE_REPORT_ONLY_REASONS.includes(f.reason))) { res.status = "FAIL"; res.reason = V1_FORM_REASON; }
       else if (res.changes.length && !onlyTrust(row, res.changes) && !hasPluginIssue(row)) { res.status = "FAIL"; res.reason = notSetUpReason(row, res, ctx.env); }
       else {
-        res.checks = await verifyRow(row, ctx);
+        res.checks = await verifyRow(row, ctx, list);
         const bad = res.checks.filter((c) => !c.ok);
         if (bad.length) { res.status = "FAIL"; res.reason = bad.map((c) => `${c.name}: ${c.detail}`).join("; "); const fix = fixLineOf(row) ?? bad.find((c) => c.fix !== undefined)?.fix; if (fix) res.fix = fix; }
       }

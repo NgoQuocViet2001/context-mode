@@ -1,8 +1,8 @@
-# ADR-0026: fx as an MCP client with no hook channel
+# ADR-0027: fx as an MCP client with no hook channel
 
 - Status: Proposed (2026-11-12). Pending owner decision.
 - Amends, if accepted: ADR-0020 (one row with no hook channel).
-- Keeps: ADR-0020 for the ten accepted hosts, ADR-0010 (doctor is the verifier), ADR-0019 (setup engine), ADR-0023 (fx has no install command that takes a package, so setup is the install path, as for Kiro), ADR-0024 (one test file per area: `tests/0026-fx-mcp-client.test.mjs`).
+- Keeps: ADR-0020 for the eleven accepted hosts, ADR-0010 (doctor is the verifier), ADR-0019 (setup engine), ADR-0023 (fx has no install command that takes a package, so setup is the install path, as for Kiro), ADR-0024 (one test file per area: `tests/0027-fx-mcp-client.test.mjs`).
 - Deviation row: D-FX-MCP-1.
 
 ## Context
@@ -24,7 +24,7 @@ Other fx behaviour that shapes the integration:
 
 ## Decision
 
-1. `fx` is appended to `AGENT_IDS` as an MCP client. Its row has hook channel `none`, an empty event map and compaction delivery `none`. The ten accepted rows are unchanged: `tests/_lib/hook-hosts.mjs` pins them, and every check that allows `none` asserts the row is fx.
+1. `fx` is appended to `AGENT_IDS` as an MCP client. Its row has hook channel `none`, an empty event map and compaction delivery `none`. The eleven accepted rows are unchanged: `tests/_lib/hook-hosts.mjs` pins them, and every check that allows `none` asserts the row is fx.
 2. Setup writes the `context-mode` stdio entry into the container fx reads, with `operation_timeout_ms: 630000` (EXEC_TIMEOUT_MS plus 30 s, so a run that hits its own limit still sends its reply; an owned field, like zcode's `timeoutMs`), and the three skills to `~/.fx/skills`. The data root of the setup run goes into the env map fx reads; a run without `CONTEXT_MODE_DATA_DIR` removes an older one, so the server and the CLI share the default root. Other fields and servers stay.
 3. Setup refuses an entry it would have to override (disabled, not stdio, a `url` with no `type`, an env value that is not a string, a `required`, `startup_timeout_ms` or `restart_limit` value fx skips the entry for), a profile or container that is not an object, and a profile fx cannot read (invalid JSON, a repeated key, a UTF-8 BOM, over 1 MiB). Each refusal names the file and its own Fix: line, never another setup run.
 4. Setup and doctor check the entry through fx. `fx mcp list --json` must list the entry from that profile as a stdio server that is not started, then `fx mcp show context-mode --json` must report it ready with the nine tools. Without the fx coding agent on PATH both checks are WARN. The three hook checks are WARN.

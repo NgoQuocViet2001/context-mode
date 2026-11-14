@@ -28,7 +28,7 @@ To do the setup step by hand, run `context-mode setup --print fx` and follow wha
 - Adds the `context-mode` entry to `~/.fx/mcp.json`: under `mcp` when the file has it, else under `mcpServers`. Other servers and keys stay. The entry sets `operation_timeout_ms` to 630000, 30 s above the `ctx_execute` limit, so fx waits for a long run (the fx 0.0.16 default is 60000).
 - Sets `CONTEXT_MODE_DATA_DIR` in the entry's env map when setup runs with it, and removes it when setup runs without it, so the server and the `context-mode` command use the same data folder.
 - Writes the skills `/ctx-doctor`, `/ctx-stats` and `/ctx-upgrade` to `~/.fx/skills/<name>/SKILL.md`.
-- Writes no hooks: fx has no hook a package can register ([ADR-0026](../architecture/adr/0026-fx-mcp-client.md), proposed). The output of fx's own `shell`, `read_file` and `grep_files` tools reaches the model as fx returns it.
+- Writes no hooks: fx has no hook a package can register ([ADR-0027](../architecture/adr/0027-fx-mcp-client.md), proposed). The output of fx's own `shell`, `read_file` and `grep_files` tools reaches the model as fx returns it.
 - Backs up each file first. A failed step is rolled back byte for byte. Setup writes the profile and its backup with owner-only access (0600), as fx does; remove puts the old mode back.
 - Never edits `AGENTS.md` or other instruction files.
 

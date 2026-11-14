@@ -36,8 +36,13 @@ describe("ADR-0018: contracts (concurrent)", { concurrency: CONC }, () => {
       assert.deepEqual(AGENT_IDS.slice(0, 10), ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode"]);
     });
 
-    test("AGENT_IDS ends with the proposed fx MCP client, after the ten hook agents (ADR-0026)", () => {
-      assert.deepEqual(AGENT_IDS.slice(10), ["fx"]);
+    test("AGENT_IDS has the 10 agents in PRD §3 order, then omp as the 11th (ADR-0026 T17)", () => {
+      assert.equal(AGENT_IDS[10], "omp");
+      assert.equal(AGENT_IDS.slice(0, 11).length, 11);
+    });
+
+    test("AGENT_IDS ends with the proposed fx MCP client, after the eleven hook agents (ADR-0027)", () => {
+      assert.deepEqual(AGENT_IDS.slice(11), ["fx"]);
     });
 
     test("TOOL_ORDER has the 9 tool names in order", () => {

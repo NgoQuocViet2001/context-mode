@@ -37,10 +37,10 @@ export function getAdapter(id: AgentId): AdapterRow;
 - Output: `AdapterRow`.
 - Steps:
   1. Find the row in `ADAPTERS` whose `id === id`.
-  2. `AGENT_IDS` is exhaustive: ten accepted hosts plus the proposed fx MCP client (ADR-0026). Every `AgentId` has exactly one row; no "not found" branch exists.
+  2. `AGENT_IDS` is exhaustive: eleven accepted hosts plus the proposed fx MCP client (ADR-0027). Every `AgentId` has exactly one row; no "not found" branch exists.
 - Errors: none. `AgentId` is a closed union; a value outside it is a TypeScript compile error, not a runtime case.
 - Constants used: `AGENT_IDS` (`contracts/agents.ts`).
-- E2E: GP1 (install/handshake, ×10 adapters) proves every hook host id resolves; `tests/0026-fx-mcp-client.test.mjs` covers the fx row. Covers: `src/adapters/table.ts`.
+- E2E: GP1 (install/handshake, ×10 adapters) proves every hook host id resolves; `tests/0027-fx-mcp-client.test.mjs` covers the fx row. Covers: `src/adapters/table.ts`.
 
 ### 1.3 The ten rows
 
@@ -65,7 +65,7 @@ Citations: `installMode` — PRD §3 agent table. `projectSource` — PRD §5 ta
 
 Note (DECISIONS-r9 V9): Claude Code's `compactSummary: "host"` row stays `"host"` only until live test spec T-CMP runs (`DECISIONS-r9` V9, arms B1-B3/B5). If arm (a) of T-CMP fails, the `claude-code` row flips to `"none"` in the same commit that records the failure — no separate migration step.
 
-The proposed fx row (ADR-0026) uses `mcp-entry`, `spawn-cwd`, the `mcp_context-mode_` tool prefix and `.fx/skills`. It has no event map and hook channel `none`.
+The proposed fx row (ADR-0027) uses `mcp-entry`, `spawn-cwd`, the `mcp_context-mode_` tool prefix and `.fx/skills`. It has no event map and hook channel `none`.
 
 ### 1.3a `nativeTools` and `execReadOnlyHint` per row (DECISIONS-r9 R4, R5)
 
@@ -187,7 +187,7 @@ export function encode(ev: CanonicalHookEvent, d: Decision, extra?: string): Hoo
 
 1. Switch on `d.kind`:
    - `"allow"`: native stdout = `""` (or, for agents whose plain-text hook requires silence on `PromptSubmit`/`UserPromptSubmit`, exactly `""` — Kiro, GP3 fixture) exit `0`.
-   - `"hint"`: write `d.text` into this agent's hint field (table below) if one exists; else (Gemini, Pi, OpenCode 2 lack a PreToolUse hint field, PRD §10.1/ADR-0001 Consequences) drop it — the hint reaches the model only through tool descriptions, never a second mechanism.
+   - `"hint"`: write `d.text` into this agent's hint field (table below) if one exists; else (Gemini, Pi, OMP, OpenCode 2 lack a PreToolUse hint field, PRD §10.1/ADR-0001 Consequences) drop it — the hint reaches the model only through tool descriptions, never a second mechanism.
    - `"deny"`: write `d.reason` (prefixed with the rewritten command when `d.rewritten` is set) into this agent's deny field (table below); exit `2`. Never `allow` + an input-rewrite field (ADR-0001 Decision 1, PRD §10.2 — `updatedInput` is never used).
    - `"replace"`: only valid on `PostToolUse`; write `d.output` into this agent's output-replace field if one exists (Claude Code: `updatedToolOutput`); else no-op (case C has no substitute on an agent with no such field — ADR-0016 table, Q23 Kiro row: "no rewrite/replace channel either way").
 2. Return `{ stdout, exitCode }`.
@@ -421,4 +421,4 @@ In-process glue only, same reasoning as Pi.
 - DECISIONS-r6 D6: added `compactSummary: "host" | "none"` to the `ADAPTERS` table (§1.3). Claude Code = `"host"` (one pointer line, no state block). Every other agent = `"none"` (full 2,048 B block through its ADR-0009 §6 path) until its own LV-COMPACT live check (M3) passes.
 - DECISIONS-r9: R1 Codex `toolNamePrefix` to `mcp__context_mode__` (underscore) everywhere in this file (§1.3, §1.3a, §1.5, §3); R3 ZCode marked `[unverified, T-ZC]` with live test spec added (§1.5a); R4 added `nativeTools` field, rewrote all host matchers as generated from `nativeTools` + `toolNamePrefix` (§1.3a, §1.5); R5 added `execReadOnlyHint` (§1.3a); R6 added Codex install/doctor note (§3); V9 added compactSummary flip note (§1.3); intern questions closed: T-ZC fixture path and `SKIPPED` rule (§1.5a, A5), Qwen shell-name live check folded into S-NAMES (§1.5b, A6).
 - M2-T2: added §1.6 (instructions + skill-exposure rows per agent) from S-COPILOT (Blocked), S-SKILLS (9/10 by source, Copilot CLI Blocked), S-ZCODE instructions row ([S] no; live probe Blocked); Assumptions A8, A9.
-- 2026-11-12 (ADR-0026, proposed): §1.2 and §1.3 name the fx row.
+- 2026-11-12 (ADR-0027, proposed): §1.2 and §1.3 name the fx row.

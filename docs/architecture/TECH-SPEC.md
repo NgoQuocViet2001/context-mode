@@ -69,9 +69,9 @@ M7 is not done. Open items are listed in `https://github.com/mksglu/context-mode
 
 ## 2. Scope
 
-- **[D] Agents (10):** Claude Code, Codex CLI, Gemini CLI, Qwen Code, Copilot CLI, VS Code Copilot, Kiro, ZCode, Pi, OpenCode 2.
-- **[P] fx (MCP client):** fx 0.0.16 reads `~/.fx/mcp.json` and `~/.fx/skills`; its tools are `mcp_context-mode_*`, found through `capability_search`. No hooks and no compaction delivery ([ADR-0026](adr/0026-fx-mcp-client.md)).
-- **[D] Removed:** agy (PRD §15.5), OMP (G20), Cursor, JetBrains, Zed, Kimi, Kilo, OpenClaw, OpenCode 1.x, Codex Desktop.
+- **[D] Agents (11):** Claude Code, Codex CLI, Gemini CLI, Qwen Code, Copilot CLI, VS Code Copilot, Kiro, ZCode, Pi, OpenCode 2, OMP. OMP came back as its own agent in ADR-0026.
+- **[P] fx (MCP client):** fx 0.0.16 reads `~/.fx/mcp.json` and `~/.fx/skills`; its tools are `mcp_context-mode_*`, found through `capability_search`. No hooks and no compaction delivery ([ADR-0027](adr/0027-fx-mcp-client.md)).
+- **[D] Removed:** agy (PRD §15.5), Cursor, JetBrains, Zed, Kimi, Kilo, OpenClaw, OpenCode 1.x, Codex Desktop.
 - **[D]** One `context.db` per project (G21, ADR-0002). Users install with `npm i -g context-mode && context-mode setup` (ADR-0019); the git `release` branch stays for the Claude Code marketplace (G12–G14, G22). Users get 3 command skills (`/ctx-stats`, `/ctx-doctor`, `/ctx-upgrade`) plus this repo's own `/release` skill (not shipped to users); `ctx_doctor` and `ctx_upgrade` are MCP tools; `context-mode doctor` and `context-mode upgrade` are the CLI forms that can fix (ADR-0010, ADR-0019 section 2).
 
 The PRD was rewritten on 2026-10-15 to match this spec; no PRD line is superseded.
@@ -269,7 +269,7 @@ Marketplace installs: the host's own update command is the path; `ctx_upgrade` r
 
 ### 3.10 Removed-agent files [D]
 
-Removed from the repo, not only from the release tree (paths from `origin/main` @ `5869f4fa`):
+Removed from the repo, not only from the release tree (paths from `origin/main` @ `5869f4fa`). OMP left this list on 2026-11-14: it is the 11th agent again (ADR-0026) and runs the Pi entry, so its v1 paths below stay removed:
 `.cursor-plugin/`, `.openclaw-plugin/`, `openclaw.plugin.json`, `configs/{antigravity,antigravity-cli,cursor,jetbrains-copilot,kilo,kimi,omp,openclaw,zed}/`, `hooks/{antigravity-cli,cursor,jetbrains-copilot,kimi}/`, `hooks/formatters/cursor.mjs`, `src/adapters/{antigravity,antigravity-cli,cursor,jetbrains-copilot,kimi,omp,openclaw,zed}/`, `docs/adapters/{kimi-code,openclaw}.md`, `docs/jetbrains-copilot.md`, `scripts/install-openclaw-plugin.sh`, `scripts/lib/register-openclaw-config.mjs`, `scripts/test-openclaw-e2e.sh`, `.github/workflows/openclaw-e2e.yml`, `.claude/skills/context-mode-ops/`, and the `openclaw` key in `package.json`. A CI check (GS5) fails if any of these names reappears.
 
 ## 4. Repository layout deltas
@@ -477,7 +477,7 @@ M0 build and CI gate: only closed spikes (`S-NODE`, `S-TIMEOUT`) and `S-CODEX` m
 | Q8 | E2E-live runs in the keyless harness (ADR-0012): every step on `claude-sonnet-5 --effort low`, the full case set before `/release`; never CI, never a key, never nightly | **[D]** |
 | Q9 | **Test runner = `node:test`**; matrix 3 OS × min/current Node, ≤ 10 min per OS | **[D]** |
 | Q10 | Kiro, ZCode: tool descriptions only | **[D]** |
-| Q11 | **All 10 agents, Codex included, are supported and release-gated by GP-LIVE-ROUTING**; no `AGENTS.md` | **[D, closed by S-CODEX, 2026-10-17]** — live probe confirms Codex defers MCP tool metadata (name only up front, full description/instructions only at discovery/call time, `https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/tickets/spikes-r5/S-CODEX.md`); the 37 `defer_loading` references under `codex-rs/core/src` (TECH-SPEC.md:86) still were not read, but the live result answers the question the spike was gating on, so the release gate no longer rests on an unconfirmed assumption |
+| Q11 | **All 10 agents (11 with OMP, ADR-0026), Codex included, are supported and release-gated by GP-LIVE-ROUTING**; no `AGENTS.md` | **[D, closed by S-CODEX, 2026-10-17]** — live probe confirms Codex defers MCP tool metadata (name only up front, full description/instructions only at discovery/call time, `https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/tickets/spikes-r5/S-CODEX.md`); the 37 `defer_loading` references under `codex-rs/core/src` (TECH-SPEC.md:86) still were not read, but the live result answers the question the spike was gating on, so the release gate no longer rests on an unconfirmed assumption |
 | Q12 | Prompt texts use bare tool names only (`ctx_execute`); host-prefixed names live only in the adapter name map (§3.8, PR12) | **[D]** |
 
 ## 11. Global constants and current rules
@@ -498,7 +498,7 @@ These are the current, decided values. Round-by-round history is in §13.
 
 ## 12. Implementation plan
 
-Milestones M0–M7 cover the current scope: 10 agents, 9 tools, single DB, enforcement, compaction, doctor/upgrade, release, v1 retention. Exit of v2.0 = every GS row in §1.
+Milestones M0–M7 cover the v2.0 scope: 10 agents (ADR-0026 adds OMP as the 11th), 9 tools, single DB, enforcement, compaction, doctor/upgrade, release, v1 retention. Exit of v2.0 = every GS row in §1.
 
 Each step is one PR. No step is done until its E2E gate runs green (ADR-0017). "Gate" names the GP case or live case and its `covers` paths (the live harness runs only the cases whose `covers` match the changed files, §6.9). "Impl file" names the `docs/architecture/modules/` file to follow for that step (ADR-0018).
 
@@ -585,4 +585,4 @@ R1–R8 of ADR-0017; the v1-migration live case set; final doc sign-off.
 - r9 intern-question close (2026-10-16, role S1): §9 states which spikes gate M0 step 6 (`S-NODE`, `S-TIMEOUT`, `S-CODEX` only; `S-COPILOT`/`S-ZCODE`/`S-NAMES`/`S-SKILLS`/`G25` are M2/M3 and print `SKIPPED`, not `FAIL`, before then).
 - M7-S1 (2026-10-19): §1.1 added: GS1–GS11 status from `gate.mjs --milestone M7` and `e2e/live/run.mjs --all`. GS5/GS10 fail on `check-removed.mjs` (22 paths), GS11 fails on live T-CMP; R1, R2 PENDING owner (D-M7-arch-5). M7 not marked done.
 - M7-S2 (2026-10-19): §1.1 re-measured on d1accdd4. GS5 and GS10 R3–R8 now PASS (`check-removed.mjs` exit 0, 6/6 v1-migration cases); gate --milestone M7 all layers PASS; live --all 27/31 (4 FAIL). GS6 fails (T-GS6 Claude Code p95 46 ms, T-F1 291 ms), GS11 fails (ci-config timeout 10 vs 20, T-CMP). R1, R2 PENDING owner. M7 not marked done.
-- ADR-0026 (2026-11-12, proposed): §2 lists fx as a [P] MCP client.
+- ADR-0027 (2026-11-12, proposed): §2 lists fx as a [P] MCP client.

@@ -2773,9 +2773,9 @@ describe("PRD-v2 section 8: stage 1 (concurrent)", { concurrency: CONC }, () => 
 
   // Moved from tests/e2e/fetch-index-search-parity.test.mjs
   // Serial inside the concurrent stage: the summary tests read the Map the per-host tests fill, in order.
-  describe("PRD-v2 section 8 / fetch, index, search parity on 10 hosts", { concurrency: 1 }, () => {
+  describe("PRD-v2 section 8 / fetch, index, search parity on 11 hosts", { concurrency: 1 }, () => {
     // Owner scenario (Pi session 2026-10-30): "Fetch the React useEffect docs, index them, and find the cleanup pattern
-    // with code examples." For all 10 hosts: ctx_index {url} then ctx_search {queries}, each the way the host runs it.
+    // with code examples." For all 11 hosts: ctx_index {url} then ctx_search {queries}, each the way the host runs it.
     //   MCP hosts (claude-code, codex, gemini, qwen, copilot-cli, vscode, kiro, zcode): the built server.mjs --agent <host>
     //     over stdio JSON-RPC (vscode also gets --workspace-folder, as setup writes it).
     //   pi: src/entries/pi.ts in process, with the documented ctx object ({cwd, sessionManager}) from before_agent_start.
@@ -2803,7 +2803,7 @@ describe("PRD-v2 section 8: stage 1 (concurrent)", { concurrency: CONC }, () => 
     const QUERY = "useEffect cleanup function return pattern";
     const OUTPUT_CAP = 16384; // src/core/contracts/constants.ts OUTPUT_CAP: the one bound for every reply
     const MCP_HOSTS = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode"];
-    const ALL_HOSTS = [...MCP_HOSTS, "pi", "opencode"];
+    const ALL_HOSTS = [...MCP_HOSTS, "pi", "opencode", "omp"]; // ADR-0026: omp runs the Pi factory with its own id
 
     let root, pkg, srv, url, probeUrl;
     const results = new Map(); // host -> { indexText, searchText }
@@ -2883,12 +2883,12 @@ describe("PRD-v2 section 8: stage 1 (concurrent)", { concurrency: CONC }, () => 
     }
 
     /** The pi extension, driven as Pi drives it: before_agent_start with ctx, then tool.execute. */
-    async function piRun(proj, calls) {
-      const { default: piExtension } = await import("../src/entries/pi.ts");
+    async function piRun(proj, calls, host = "pi") {
+      const { hostExtension } = await import("../src/entries/pi.ts");
       const handlers = new Map();
       const tools = new Map();
-      piExtension({ on: (n, f) => handlers.set(n, f), registerTool: (t) => tools.set(t.name, t) });
-      const ctx = { cwd: proj, sessionManager: { getSessionId: () => "parity-pi" } };
+      hostExtension({ on: (n, f) => handlers.set(n, f), registerTool: (t) => tools.set(t.name, t) }, host);
+      const ctx = { cwd: proj, sessionManager: { getSessionId: () => "parity-" + host } };
       await handlers.get("before_agent_start")({ systemPrompt: "" }, ctx);
       const out = [];
       for (const [name, a] of calls) {
@@ -2922,7 +2922,7 @@ describe("PRD-v2 section 8: stage 1 (concurrent)", { concurrency: CONC }, () => 
       const proj = gitRepo(join(root, "proj-" + tag));
       if (mcp) return mcpRun(host, home, proj, calls);
       process.env.HOME = home; process.env.USERPROFILE = home; process.env.PARITY_HOST = HOST;
-      return host === "pi" ? piRun(proj, calls) : opencodeRun(proj, calls);
+      return host === "opencode" ? opencodeRun(proj, calls) : piRun(proj, calls, host); // pi and omp share the factory
     }
 
     const chunksOf = (t) => Number(/(\d+) chunk\(s\)/.exec(t)?.[1]);
@@ -2956,7 +2956,7 @@ describe("PRD-v2 section 8: stage 1 (concurrent)", { concurrency: CONC }, () => 
       assert.equal(out[1].text, results.get("claude-code").searchText);
     });
 
-    test("[parity] all 10 hosts: same chunk count, same hit list, same reply bytes, reply under OUTPUT_CAP", () => {
+    test("[parity] all 11 hosts: same chunk count, same hit list, same reply bytes, reply under OUTPUT_CAP", () => {
       assert.equal(results.size, ALL_HOSTS.length, "every host ran: " + [...results.keys()].join(","));
       const ref = results.get("claude-code");
       const table = ALL_HOSTS.map((h) => `${h}: chunks=${chunksOf(results.get(h).indexText)} bytes=${bytes(results.get(h).searchText)} hits=${hitIds(results.get(h).searchText).length}`);
@@ -3405,6 +3405,93 @@ describe("PRD-v2 section 8 / safeFetch", () => {
       assert.equal(err.message, "Fetch failed: ABORT_ERR. Fix: check the URL or proxy.");
       return true;
     }));
+  });
+
+  // ---- #1380 (D-1380-FETCH-UA-1): every request names itself like v1 did (v1 undici sent user-agent and accept) ----
+  // The local server acts like en.wikipedia.org: 403 for a request without a user-agent, else 200 and the headers it
+  // got as JSON. _parity-net-shim moves only the last hop (docs.parity.test -> 127.0.0.1); the SSRF check still runs.
+  const UA_PREFIX = "context-mode/";
+  const UA_SUFFIX = " (+https://github.com/mksglu/context-mode)";
+  function assertNamed(h, where) {
+    const ua = h["user-agent"] ?? "";
+    assert.ok(ua.startsWith(UA_PREFIX) && ua.endsWith(UA_SUFFIX) && ua.length > UA_PREFIX.length + UA_SUFFIX.length, where + ": user-agent " + JSON.stringify(ua));
+    assert.equal(h.accept, "*/*", where + ": accept");
+  }
+  async function uaServer(onReq) {
+    const seen = [];
+    const srv = createServer((req, res) => {
+      seen.push({ method: req.method, url: req.url, headers: req.headers });
+      if (onReq && onReq(req, res, srv)) return;
+      if (!req.headers["user-agent"]) { res.writeHead(403); res.end("forbidden"); return; }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(req.headers));
+    });
+    srv.on("connect", (req, sock) => {
+      seen.push({ method: "CONNECT", url: req.url, headers: req.headers });
+      sock.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+    });
+    await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+    return { srv, seen, port: srv.address().port, close: () => new Promise((r) => srv.close(r)) };
+  }
+
+  test("#1380: a direct request sends user-agent and accept, so a host that needs them answers 200", async () => {
+    const s = await uaServer();
+    try {
+      const out = await withEnv({}, () => safeFetch("http://docs.parity.test:" + s.port + "/wiki/Node.js", AbortSignal.timeout(5000)));
+      assertNamed(JSON.parse(out.body.toString("utf8")), "direct");
+      assert.equal(s.seen.length, 1);
+    } finally { await s.close(); }
+  });
+
+  test("#1380: a redirect hop sends the same user-agent and accept", async () => {
+    const s = await uaServer((req, res) => {
+      if (req.url !== "/start") return false;
+      res.writeHead(301, { location: "/final" });
+      res.end();
+      return true;
+    });
+    try {
+      const out = await withEnv({}, () => safeFetch("http://docs.parity.test:" + s.port + "/start", AbortSignal.timeout(5000)));
+      assert.ok(out.finalUrl.endsWith("/final"), out.finalUrl);
+      assert.deepEqual(s.seen.map((x) => x.url), ["/start", "/final"]);
+      for (const x of s.seen) assertNamed(x.headers, "hop " + x.url);
+    } finally { await s.close(); }
+  });
+
+  test("#1380: through HTTP_PROXY the proxied request sends user-agent and accept", async () => {
+    const s = await uaServer();
+    try {
+      const proxy = "http://docs.parity.test:" + s.port;
+      const out = await withEnv({ HTTP_PROXY: proxy }, () => safeFetch("http://origin.example/page", AbortSignal.timeout(5000)));
+      assert.equal(s.seen[0].url, "http://origin.example/page", "the proxy got the absolute URL");
+      assertNamed(JSON.parse(out.body.toString("utf8")), "http proxy");
+    } finally { await s.close(); }
+  });
+
+  test("#1380: through HTTPS_PROXY the CONNECT request sends user-agent and accept", async () => {
+    const s = await uaServer();
+    try {
+      const proxy = "http://docs.parity.test:" + s.port;
+      await withEnv({ HTTPS_PROXY: proxy }, () => assert.rejects(safeFetch("https://origin.example/page", AbortSignal.timeout(5000)), (err) => {
+        assert.equal(err.code, "FETCH_FAILED");
+        return true;
+      }));
+      const connect = s.seen.find((x) => x.method === "CONNECT");
+      assert.ok(connect, "the proxy got a CONNECT");
+      assert.equal(connect.url, "origin.example:443");
+      assertNamed(connect.headers, "CONNECT");
+    } finally { await s.close(); }
+  });
+
+  test("#1380: a non-2xx reply names the status and the host in one line", async () => {
+    const s = await uaServer((req, res) => { res.writeHead(403); res.end("forbidden"); return true; });
+    try {
+      await withEnv({}, () => assert.rejects(safeFetch("http://docs.parity.test:" + s.port + "/wiki/x", AbortSignal.timeout(5000)), (err) => {
+        assert.equal(err.code, "FETCH_FAILED");
+        assert.equal(err.message, "Fetch failed: 403 from docs.parity.test. Fix: check the URL or proxy.");
+        return true;
+      }));
+    } finally { await s.close(); }
   });
 
   test("an IP-literal private origin is blocked even when a proxy is set (B57 hop rule)", async () => {

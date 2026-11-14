@@ -42,6 +42,7 @@ function sourceOf(agent: AgentId): ProjectSourceKind {
     case "fx":
       return "spawn-cwd";
     case "pi":
+    case "omp": // ADR-0026: OMP passes ctx.cwd like Pi
       return "pi:ctx.cwd";
   }
 }

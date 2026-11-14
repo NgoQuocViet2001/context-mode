@@ -1,10 +1,10 @@
 # Context Mode
 
-**A free, local plugin for 10 coding agents. It keeps tool output out of your agent's context window and keeps all usage data on your machine. The plugin is free forever.**
+**A free, local plugin for 11 coding agents. It keeps tool output out of your agent's context window and keeps all usage data on your machine. The plugin is free forever.**
 
 [![npm downloads](https://img.shields.io/npm/dt/context-mode?label=npm%20downloads)](https://www.npmjs.com/package/context-mode) [![GitHub stars](https://img.shields.io/github/stars/mksglu/context-mode?style=flat&color=yellow)](https://github.com/mksglu/context-mode) [![Discord](https://img.shields.io/discord/1478479412700909750?label=Discord&logo=discord&color=5865f2)](https://discord.gg/DCN9jUgN5v) [![License: ELv2](https://img.shields.io/badge/License-ELv2-blue.svg)](LICENSE)
 
-**33K GitHub stars · 683K npm downloads** (read 2026-11-01, [stats.json](stats.json)) · on the Hacker News front page and GitHub Trending: [charts and sources](#adoption-stars-and-npm-downloads)
+**34K GitHub stars · 835K npm downloads** (read 2026-11-14, [stats.json](stats.json)) · on the Hacker News front page and GitHub Trending: [charts and sources](#adoption-stars-and-npm-downloads)
 
 > The Context Mode plugin is free and local, with its source open on GitHub. **Context Mode Gateway** is a separate hosted service with its own account and subscription. It takes the same idea from tool output to the whole conversation: Gateway Recall keeps long sessions searchable, and Gateway Memory shares what your agents learn across sessions and tools. [See how the Gateway works](https://contextmode.ai/docs/how-saving-works?utm_source=github&utm_medium=readme&utm_content=quote)
 
@@ -49,7 +49,7 @@ Starred by engineers at these companies: each name is the company field of 2 or 
 
 ## Install
 
-Pick your agent: [Claude Code](#install-claude-code) · [Codex](#install-codex) · [Gemini CLI](#install-gemini) · [Qwen Code](#install-qwen) · [Pi](#install-pi) · [OpenCode](#install-opencode) · [Copilot CLI](#install-copilot-cli) · [Kiro](#install-kiro) · [VS Code](#install-vscode) · [ZCode](#install-zcode) · [fx](#install-fx)
+Pick your agent: [Claude Code](#install-claude-code) · [Codex](#install-codex) · [Gemini CLI](#install-gemini) · [Qwen Code](#install-qwen) · [Pi](#install-pi) · [OMP](#install-omp) · [OpenCode](#install-opencode) · [Copilot CLI](#install-copilot-cli) · [Kiro](#install-kiro) · [VS Code](#install-vscode) · [ZCode](#install-zcode) · [fx](#install-fx)
 
 Open its block and copy its own install command. Each block also holds the update, check and remove steps, and the [Install guide](https://contextmode.ai/docs/engine/install?utm_source=github&utm_medium=readme&utm_content=install) walks through them.
 
@@ -147,6 +147,24 @@ pi update --extensions
 pi list
 # remove
 pi remove npm:context-mode
+```
+
+Hooks ✓ (the plugin's own event handlers) · MCP ✓ (ctx tools built into the plugin) · Skills ✓
+
+</details>
+<details id="install-omp"><summary><b>OMP</b></summary>
+
+```sh
+omp plugin install context-mode
+```
+
+```sh
+# update
+omp plugin upgrade context-mode
+# check
+omp plugin list
+# remove
+omp plugin uninstall context-mode
 ```
 
 Hooks ✓ (the plugin's own event handlers) · MCP ✓ (ctx tools built into the plugin) · Skills ✓
@@ -288,11 +306,11 @@ Restart the agent, then run `/ctx-doctor` in it. Each check prints PASS or a fix
 
 <details><summary><b>How we tested the install</b></summary>
 
-Every agent gets the MCP server and the plugin skills, and every agent but fx gets hooks ([ADR-0026](docs/architecture/adr/0026-fx-mcp-client.md), proposed); the last line of each block above says how.
-Hooks reach the ten hook agents in one of three ways: in the plugin package (Claude Code, Gemini CLI, Qwen Code), in a hook file (Codex, Copilot CLI, Kiro, VS Code, ZCode), or in a plugin inside the agent (OpenCode, Pi). The [Agents guide](https://contextmode.ai/docs/engine/agents?utm_source=github&utm_medium=readme&utm_content=install-agents) shows what each agent runs.
-We ran the real binary of each agent with the plugin hook: Claude Code, Codex, Gemini CLI, Qwen Code, Pi, OpenCode, Copilot CLI and ZCode. Each run used a clean temp home and a local test model, on 2.0.0-next.15.
+Every agent gets the MCP server and the plugin skills, and every agent but fx gets hooks ([ADR-0027](docs/architecture/adr/0027-fx-mcp-client.md), proposed); the last line of each block above says how.
+Hooks reach the eleven hook agents in one of three ways: in the plugin package (Claude Code, Gemini CLI, Qwen Code), in a hook file (Codex, Copilot CLI, Kiro, VS Code, ZCode), or in a plugin inside the agent (OpenCode, Pi, OMP). The [Agents guide](https://contextmode.ai/docs/engine/agents?utm_source=github&utm_medium=readme&utm_content=install-agents) shows what each agent runs.
+We ran the real binary of each agent with the plugin hook: Claude Code, Codex, Gemini CLI, Qwen Code, Pi, OpenCode, Copilot CLI and ZCode. Each run used a clean temp home and a local test model, on 2.0.0-next.15. OMP 18.20.0 ran the same way with ADR-0026, and CI installs the real OMP on Linux, macOS and Windows.
 For VS Code and Kiro, the check covers the hook setup: VS Code runs the hook command with the documented payload, and kiro-cli 2.35.2 loads all 6 hook entries.
-CI runs setup, doctor, a hook and an MCP handshake for the ten hook agents from the packed package on Linux, macOS and Windows. Record: [HOOKS-FIRE.md](docs/architecture/release/HOOKS-FIRE.md).
+CI runs setup, doctor, a hook and an MCP handshake for the eleven hook agents from the packed package on Linux, macOS and Windows. Record: [HOOKS-FIRE.md](docs/architecture/release/HOOKS-FIRE.md).
 Each agent uses its own install command, and [ADR-0023](docs/architecture/adr/ADR-0023-native-install.md) says why.
 
 </details>
@@ -332,6 +350,7 @@ Run the stats skill right after a prompt. Each agent uses its own command; the s
 | fx | `Call ctx_stats and show me the report.` |
 | Gemini CLI | `Call ctx_stats and show me the report.` |
 | Kiro | `Call ctx_stats and show me the report.` |
+| OMP | `/skill:ctx-stats` |
 | OpenCode | `Call ctx_stats and show me the report.` |
 | Pi | `/skill:ctx-stats` |
 | Qwen Code | `Call ctx_stats and show me the report.` |

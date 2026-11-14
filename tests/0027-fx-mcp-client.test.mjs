@@ -1,5 +1,5 @@
-// tests/0026-fx-mcp-client.test.mjs
-// Area: ADR-0026 (proposed): fx as an MCP client with no hook channel (D-FX-MCP-1). One file per ADR area (ADR-0024).
+// tests/0027-fx-mcp-client.test.mjs
+// Area: ADR-0027 (proposed): fx as an MCP client with no hook channel (D-FX-MCP-1). One file per ADR area (ADR-0024).
 // The fx code loads in before(), so on a tree without it the fx cases fail one by one instead of the file.
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -26,7 +26,7 @@ before(async () => {
   fxModule = await import("../src/adapters/fx.ts").catch(() => undefined);
 });
 
-describe("ADR-0026 (proposed): fx adapter row", () => {
+describe("ADR-0027 (proposed): fx adapter row", () => {
   test("fx exposes MCP and skills without advertising external hooks or automatic recall", async () => {
     const row = getAdapter("fx");
     assert.equal(row.toolNamePrefix, "mcp_context-mode_");
@@ -41,7 +41,7 @@ describe("ADR-0026 (proposed): fx adapter row", () => {
     assert.equal(check.status, "WARN");
     assert.match(check.detail, /interception.*unavailable/);
   });
-  test("the table is the ten ADR-0020 hook hosts plus fx, and fx is the only row with no hook channel", () => {
+  test("the table is the eleven ADR-0020 hook hosts plus fx, and fx is the only row with no hook channel", () => {
     assert.deepEqual(ADAPTERS.map((r) => r.id), [...HOOK_HOST_IDS, "fx"]);
     assert.deepEqual(ADAPTERS.filter((r) => r.hookChannel.kind === "none").map((r) => r.id), ["fx"]);
   });
@@ -57,9 +57,9 @@ describe("ADR-0026 (proposed): fx adapter row", () => {
   });
 });
 
-// ADR-0026 (proposed, D-FX-MCP-1): fx is an MCP client with no external hook channel. Setup writes ~/.fx/mcp.json and the three
+// ADR-0027 (proposed, D-FX-MCP-1): fx is an MCP client with no external hook channel. Setup writes ~/.fx/mcp.json and the three
 // skills; fx itself (fx mcp list and fx mcp show) confirms it loads and starts the entry when the coding agent is on PATH.
-describe("ADR-0026 (proposed): fx MCP profile (setup, doctor, remove)", () => {
+describe("ADR-0027 (proposed): fx MCP profile (setup, doctor, remove)", () => {
   const FX_SKILLS = path.join(import.meta.dirname, "..", "skills");
 
   /** A home with ~/.fx, a stub MCP server that answers the handshake and tools/list, and a hook that always fails

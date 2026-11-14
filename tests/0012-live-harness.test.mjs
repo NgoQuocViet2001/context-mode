@@ -495,7 +495,7 @@ process.stdin.on("end", () => {
     test("live-local release-plan-bump", () => runLocal("release-plan-bump"));
     test("live-local repo-cleanup-gate", () => runLocal("repo-cleanup-gate"));
   });
-  // bench/fx/run.mjs (ADR-0026, proposed): the fixtures and the parsing of fx replies, with no fx and no model.
+  // bench/fx/run.mjs (ADR-0027, proposed): the fixtures and the parsing of fx replies, with no fx and no model.
   describe("ADR-0012 / fx bench harness", () => {
     const run = (cwd, file) => new Promise((resolve, reject) => {
       execFile(process.execPath, [file], { cwd, encoding: "utf8", maxBuffer: 1024 * 1024 }, (err, stdout) => (err ? reject(err) : resolve(stdout)));
