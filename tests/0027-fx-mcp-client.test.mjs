@@ -581,7 +581,42 @@ process.stderr.write("fx mcp: ~/.fx/mcp.json isn't valid JSON (private-environme
     assert.deepEqual(readFileSync(s.file), before);
   });
 
-  for (const route of ["setup", "doctor D3", "upgrade"]) test(`fx ${route} refuses an oversized profile before reading its contents`, async t => {
+  test("fx preserves multiline CRLF through setup, a repeated setup and a data-root change", async t => {
+    const s = fxSandbox(t);
+    const before = JSON.stringify({ future: { keep: "unchanged" }, mcpServers: { other: { command: "keep" } } }, null, 2).replaceAll("\n", "\r\n") + "\r\n";
+    writeFileSync(s.file, before);
+    assert.equal((await runSetup({ ...s, runId: "crlf" })).exitCode, 0);
+    const installed = readFileSync(s.file, "utf8");
+    assert.equal(installed.includes("\r\r\n"), false, "existing CRLF is not expanded twice");
+    assert.equal(installed.split("\r\n").join("").includes("\n"), false);
+    const repeated = await runSetup({ ...s, runId: "crlf-again" });
+    assert.equal(repeated.exitCode, 0);
+    assert.equal(repeated.agents[0].changes.length, 0);
+    assert.equal(readFileSync(s.file, "utf8"), installed);
+    const env = { ...s.env, CONTEXT_MODE_DATA_DIR: path.join(s.root, "other-data") };
+    assert.equal((await runSetup({ ...s, env, runId: "crlf-data-root" })).exitCode, 0);
+    const changed = readFileSync(s.file, "utf8");
+    assert.equal(changed.includes("\r\r\n"), false);
+    assert.equal(changed.split("\r\n").join("").includes("\n"), false);
+    assert.equal(JSON.parse(changed).mcpServers["context-mode"].env.CONTEXT_MODE_DATA_DIR, env.CONTEXT_MODE_DATA_DIR);
+    assert.equal(runRemove(s).exitCode, 0);
+    assert.equal(readFileSync(s.file, "utf8"), before);
+  });
+
+  test("fx rolls back a setup that grows the profile past its limit and names the size fix", async t => {
+    const s = fxSandbox(t);
+    const empty = JSON.stringify({ padding: "", mcpServers: {} });
+    const before = JSON.stringify({ padding: "x".repeat(C.FX_PROFILE_MAX_BYTES - Buffer.byteLength(empty) - 1), mcpServers: {} });
+    writeFileSync(s.file, before);
+    const result = await runSetup({ ...s, runId: "profile-growth" });
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.agents[0].rolledBack, true);
+    assert.equal(result.agents[0].fix, C.FX_SIZE_FIX(s.file));
+    assert.equal(readFileSync(s.file, "utf8"), before);
+    assert.equal(existsSync(path.join(s.fxHome, "skills", "ctx-doctor", "SKILL.md")), false);
+  });
+
+  for (const route of ["setup", "doctor D3", "upgrade", "print"]) test(`fx ${route} checks the profile size before reading its contents`, async t => {
     const s = fxSandbox(t);
     const before = JSON.stringify({ padding: "x".repeat(C.FX_PROFILE_MAX_BYTES * 2), mcpServers: {} });
     writeFileSync(s.file, before);
@@ -600,6 +635,9 @@ process.stderr.write("fx mcp: ~/.fx/mcp.json isn't valid JSON (private-environme
       } else if (route === "doctor D3") {
         const d3 = checkHostConfig(fxRow, s.env, s.home);
         assert.deepEqual({ status: d3.status, detail: d3.detail, fix: d3.fixCommand }, { status: "FAIL", detail: C.FX_CONFIG_TOO_LARGE(s.file), fix: C.FX_SIZE_FIX(s.file) });
+      } else if (route === "print") {
+        const plan = printPlan(buildRegistry(s).find(row => row.id === "fx"));
+        assert.deepEqual(plan.steps.find(step => step.kind === "config").key, ["mcpServers", "context-mode"]);
       } else assert.throws(() => regenerateHostConfig(fxRow, s.home, { env: s.env }));
       assert.deepEqual(reads, [], "the size limit is checked before readFileSync");
     } finally {
