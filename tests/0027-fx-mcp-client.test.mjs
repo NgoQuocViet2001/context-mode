@@ -4,6 +4,8 @@
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { HOOK_HOST_IDS } from "./_lib/hook-hosts.mjs";
@@ -13,6 +15,7 @@ import { checkHookRoundTrip } from "../src/core/ops/doctor-hook.ts";
 import { checkHostConfig } from "../src/core/ops/doctor-config.ts";
 import { HOST_SHAPES } from "../src/core/ops/hook-shape.ts";
 import { mergeOwnEntries } from "../src/core/ops/host-config.ts";
+import { regenerateHostConfig } from "../src/core/ops/host-write.ts";
 import { resolvePluginRoot } from "../src/core/ops/plugin-root.ts";
 import { runUninstall } from "../src/core/ops/uninstall.ts";
 import { buildRegistry, detectAgents, printPlan, runDoctor, runRemove, runSetup } from "../src/setup/index.ts";
@@ -534,6 +537,128 @@ process.stderr.write("fx mcp: ~/.fx/mcp.json isn't valid JSON (private-environme
       const d3 = checkHostConfig(fxRow, s.env, s.home);
       assert.deepEqual({ status: d3.status, detail: d3.detail, fix: d3.fixCommand }, { status: "FAIL", detail: detail(s.file), fix: fix(s.file) });
     }
+  });
+
+  test("fx refuses invalid UTF-8 without replacing the profile's original bytes", async t => {
+    const s = fxSandbox(t);
+    const before = Buffer.concat([Buffer.from('{"padding":"'), Buffer.from([0xff]), Buffer.from('","mcpServers":{}}')]);
+    writeFileSync(s.file, before);
+    const result = await runSetup({ ...s, runId: "invalid-utf8" });
+    if (result.exitCode === 0) assert.equal(runRemove(s).exitCode, 0);
+    assert.deepEqual(readFileSync(s.file), before, "a refused profile and remove keep the original bytes");
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.agents[0].fix, C.FX_PROFILE_FIX(s.file));
+    const d3 = checkHostConfig(fxRow, s.env, s.home);
+    assert.deepEqual({ status: d3.status, detail: d3.detail, fix: d3.fixCommand }, { status: "FAIL", detail: C.FX_CONFIG_PARSE(s.file), fix: C.FX_PROFILE_FIX(s.file) });
+    assert.throws(() => regenerateHostConfig(fxRow, s.home, { env: s.env }));
+    assert.deepEqual(readFileSync(s.file), before);
+    assert.equal(existsSync(path.join(s.fxHome, "skills", "ctx-doctor", "SKILL.md")), false);
+  });
+
+  test("fx refuses unpaired Unicode escapes in JSON values and keys before any write", async t => {
+    const s = fxSandbox(t);
+    for (const before of ['{"padding":"\\ud800","mcpServers":{}}', '{"padding":"\\udfff","mcpServers":{}}', '{"\\ud800":"keep","mcpServers":{}}']) {
+      writeFileSync(s.file, before);
+      const result = await runSetup({ ...s, runId: "invalid-unicode" });
+      assert.equal(result.exitCode, 1, JSON.stringify(result));
+      assert.equal(result.agents[0].fix, C.FX_PROFILE_FIX(s.file));
+      assert.equal(readFileSync(s.file, "utf8"), before);
+      const d3 = checkHostConfig(fxRow, s.env, s.home);
+      assert.deepEqual({ status: d3.status, detail: d3.detail, fix: d3.fixCommand }, { status: "FAIL", detail: C.FX_CONFIG_PARSE(s.file), fix: C.FX_PROFILE_FIX(s.file) });
+      assert.throws(() => regenerateHostConfig(fxRow, s.home, { env: s.env }));
+      assert.equal(readFileSync(s.file, "utf8"), before);
+    }
+    assert.equal(existsSync(path.join(s.fxHome, "skills", "ctx-doctor", "SKILL.md")), false);
+  });
+
+  test("fx accepts valid UTF-8 and paired Unicode escapes and remove restores their bytes", async t => {
+    const s = fxSandbox(t);
+    const before = Buffer.from('{"padding":"café 日本 😀","\\ud83d\\ude00":"\\ud83d\\ude00","mcpServers":{}}\r\n');
+    writeFileSync(s.file, before);
+    assert.equal((await runSetup({ ...s, runId: "valid-unicode" })).exitCode, 0);
+    assert.equal((await runDoctor(s)).exitCode, 0);
+    assert.equal(runRemove(s).exitCode, 0);
+    assert.deepEqual(readFileSync(s.file), before);
+  });
+
+  for (const route of ["setup", "doctor D3", "upgrade"]) test(`fx ${route} refuses an oversized profile before reading its contents`, async t => {
+    const s = fxSandbox(t);
+    const before = JSON.stringify({ padding: "x".repeat(C.FX_PROFILE_MAX_BYTES * 2), mcpServers: {} });
+    writeFileSync(s.file, before);
+    const original = fs.readFileSync;
+    const reads = [];
+    fs.readFileSync = (...args) => {
+      if (String(args[0]) === s.file) reads.push(args[1] ?? null);
+      return original(...args);
+    };
+    syncBuiltinESMExports();
+    try {
+      if (route === "setup") {
+        const result = await runSetup({ ...s, runId: "oversized-no-read" });
+        assert.equal(result.exitCode, 1);
+        assert.equal(result.agents[0].fix, C.FX_SIZE_FIX(s.file));
+      } else if (route === "doctor D3") {
+        const d3 = checkHostConfig(fxRow, s.env, s.home);
+        assert.deepEqual({ status: d3.status, detail: d3.detail, fix: d3.fixCommand }, { status: "FAIL", detail: C.FX_CONFIG_TOO_LARGE(s.file), fix: C.FX_SIZE_FIX(s.file) });
+      } else assert.throws(() => regenerateHostConfig(fxRow, s.home, { env: s.env }));
+      assert.deepEqual(reads, [], "the size limit is checked before readFileSync");
+    } finally {
+      fs.readFileSync = original;
+      syncBuiltinESMExports();
+    }
+    assert.equal(readFileSync(s.file, "utf8"), before);
+    assert.equal(existsSync(path.join(s.fxHome, "skills", "ctx-doctor", "SKILL.md")), false);
+  });
+
+  test("fx verifies a valid native server list over 1 MiB without starting unrelated servers", async t => {
+    const s = fxSandbox(t);
+    const others = Object.fromEntries(Array.from({ length: 6000 }, (_, i) => [`other-${i}`, { command: "unused" }]));
+    const before = JSON.stringify({ mcpServers: others });
+    assert.ok(Buffer.byteLength(before) < C.FX_PROFILE_MAX_BYTES);
+    writeFileSync(s.file, before);
+    const own = { name: "context-mode", source: "profile", file: s.file, transport: "stdio", status: "not_started", error: null };
+    const servers = [...Object.keys(others).map(name => ({ ...own, name })), own];
+    const listed = JSON.stringify({ servers });
+    assert.ok(Buffer.byteLength(listed) > 1024 * 1024, "list output repeats the profile path for each entry");
+    const ready = { ...own, status: "ready", tools: TOOL_ORDER.map(name => ({ name })) };
+    const calls = path.join(s.root, "large-list-calls.jsonl");
+    fakeFx(s.bin, `import { appendFileSync } from 'node:fs';
+const a=process.argv.slice(2); if(a.join(' ')==='mcp --help'){process.stdout.write(${JSON.stringify(FX_AGENT_HELP)});process.exit(0);}
+appendFileSync(${JSON.stringify(calls)},JSON.stringify(a)+'\\n');
+if(a[1]==='list')process.stdout.write(${JSON.stringify(listed)});
+else if(a[1]==='show'&&a[2]==='context-mode')process.stdout.write(${JSON.stringify(JSON.stringify(ready))});
+else process.exit(42);`);
+    const result = await runSetup({ ...s, runId: "large-list" });
+    assert.equal(result.exitCode, 0, JSON.stringify(result.agents[0]));
+    assert.equal((await runDoctor(s)).exitCode, 0);
+    assert.equal(asServer(s, () => checkHostConfig(fxRow, s.env, s.home)).status, "PASS");
+    const shows = readFileSync(calls, "utf8").trim().split("\n").map(JSON.parse).filter(a => a[1] === "show");
+    assert.ok(shows.length > 0);
+    assert.ok(shows.every(a => a[2] === "context-mode"), "verification never starts an unrelated server");
+    assert.equal(runRemove(s).exitCode, 0);
+    assert.equal(readFileSync(s.file, "utf8"), before);
+  });
+
+  test("fx names the native list verification output limit without starting a server or echoing its output", async t => {
+    const s = fxSandbox(t);
+    const before = '{"mcpServers":{"other":{"command":"keep"}}}\n';
+    writeFileSync(s.file, before);
+    const calls = path.join(s.root, "over-limit-calls.jsonl");
+    fakeFx(s.bin, `import { appendFileSync } from 'node:fs';
+const a=process.argv.slice(2); if(a.join(' ')==='mcp --help'){process.stdout.write(${JSON.stringify(FX_AGENT_HELP)});process.exit(0);}
+appendFileSync(${JSON.stringify(calls)},JSON.stringify(a)+'\\n');
+if(a[1]==='list')process.stdout.write(JSON.stringify({servers:[],detail:'synthetic-private-output-marker'.repeat(600000)}));
+else process.exit(42);`);
+    const result = await runSetup({ ...s, runId: "list-output-limit" });
+    assert.equal(result.exitCode, 1);
+    const check = result.agents[0].checks.find(c => c.name === "native-mcp");
+    assert.equal(check.detail, "fx mcp list --json output exceeded the verification limit");
+    assert.equal(result.agents[0].fix, "inspect fx mcp list --json directly and reduce unrelated server entries before retrying");
+    assert.equal(result.agents[0].rolledBack, true);
+    assert.equal(readFileSync(s.file, "utf8"), before);
+    assert.equal(JSON.stringify(result).includes("synthetic-private-output-marker"), false);
+    const logged = readFileSync(calls, "utf8").trim().split("\n").map(JSON.parse);
+    assert.ok(logged.every(a => a[1] === "list"), "an oversized list never reaches mcp show");
   });
 
   test("fx list and show run with the setup HOME and project dir, not the caller's", async t => {
