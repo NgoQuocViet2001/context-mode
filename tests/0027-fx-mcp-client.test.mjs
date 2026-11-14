@@ -14,7 +14,7 @@ import { TOOL_ORDER } from "../src/core/contracts/constants.ts";
 import { checkHookRoundTrip } from "../src/core/ops/doctor-hook.ts";
 import { checkHostConfig } from "../src/core/ops/doctor-config.ts";
 import { HOST_SHAPES } from "../src/core/ops/hook-shape.ts";
-import { mergeOwnEntries } from "../src/core/ops/host-config.ts";
+import { mergeOwnEntries, readFxProfile } from "../src/core/ops/host-config.ts";
 import { regenerateHostConfig } from "../src/core/ops/host-write.ts";
 import { resolvePluginRoot } from "../src/core/ops/plugin-root.ts";
 import { runUninstall } from "../src/core/ops/uninstall.ts";
@@ -646,6 +646,41 @@ process.stderr.write("fx mcp: ~/.fx/mcp.json isn't valid JSON (private-environme
     }
     assert.equal(readFileSync(s.file, "utf8"), before);
     assert.equal(existsSync(path.join(s.fxHome, "skills", "ctx-doctor", "SKILL.md")), false);
+  });
+
+  test("fx bounds a profile that grows after fstat and closes its file without changing the grown bytes", t => {
+    const s = fxSandbox(t);
+    const before = "{}";
+    const appended = " ".repeat(C.FX_PROFILE_MAX_BYTES + 32);
+    writeFileSync(s.file, before);
+    const originalStat = fs.fstatSync;
+    const originalRead = fs.readSync;
+    let fd;
+    let readBytes = 0;
+    fs.fstatSync = current => {
+      const stat = originalStat(current);
+      if (fd === undefined) {
+        fd = current;
+        fs.appendFileSync(s.file, appended);
+      }
+      return stat;
+    };
+    fs.readSync = (...args) => {
+      const n = originalRead(...args);
+      readBytes += n;
+      return n;
+    };
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => readFxProfile(s.file), e => e.message === C.FX_CONFIG_TOO_LARGE(s.file) && e.fix === C.FX_SIZE_FIX(s.file));
+    } finally {
+      fs.fstatSync = originalStat;
+      fs.readSync = originalRead;
+      syncBuiltinESMExports();
+    }
+    assert.ok(readBytes <= C.FX_PROFILE_MAX_BYTES + 1, "reading stops at the limit plus its sentinel byte");
+    assert.throws(() => originalStat(fd), e => e.code === "EBADF", "the refused profile's descriptor is closed");
+    assert.equal(readFileSync(s.file, "utf8"), before + appended);
   });
 
   test("fx verifies a valid native server list over 1 MiB without starting unrelated servers", async t => {

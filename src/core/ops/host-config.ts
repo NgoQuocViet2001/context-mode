@@ -497,10 +497,16 @@ export function readFxProfile(file: string, options: { allowBom?: boolean } = {}
   let fd: number | undefined;
   try {
     fd = openSync(file, "r");
-    if (fstatSync(fd).size > FX_PROFILE_MAX_BYTES) throw fxRefusal({ detail: FX_CONFIG_TOO_LARGE(file), fix: FX_SIZE_FIX(file) });
-    const raw = Buffer.allocUnsafe(FX_PROFILE_MAX_BYTES + 1);
+    const size = fstatSync(fd).size;
+    if (size > FX_PROFILE_MAX_BYTES) throw fxRefusal({ detail: FX_CONFIG_TOO_LARGE(file), fix: FX_SIZE_FIX(file) });
+    let raw = Buffer.allocUnsafe(size + 1);
     let length = 0;
-    while (length < raw.length) {
+    while (length <= FX_PROFILE_MAX_BYTES) {
+      if (length === raw.length) {
+        const grown = Buffer.allocUnsafe(Math.min(raw.length * 2, FX_PROFILE_MAX_BYTES + 1));
+        raw.copy(grown, 0, 0, length);
+        raw = grown;
+      }
       const n = readSync(fd, raw, length, raw.length - length, null);
       if (n === 0) break;
       length += n;

@@ -66,7 +66,7 @@ Status: accepted 2026-10-30, move done. Decision record: [ADR-0024](adr/0024-tes
 | 0014-repo-hygiene | ADR-0013, ADR-0014, ADR-0015 | `tests/0014-repo-hygiene.test.mjs` | issue forms, workflows, README, secrets, removed files | 81 | 3.6 |
 | 0023-install-docs | ADR-0023, PRD-setup | `tests/0023-install-docs.test.mjs` | install docs per agent use the native install command | 44 | 0.8 |
 | 0021-cache-safety | ADR-0021 | `tests/0021-cache-safety.test.mjs` | prompt cache safety, prefix determinism, cache usage | 37 | 9.5 |
-| 0027-fx-mcp-client | ADR-0027 (proposed), ADR-0019 | `tests/0027-fx-mcp-client.test.mjs` | fx as an MCP client: adapter row, profile setup, doctor and remove, checks through fx | 28 | - |
+| 0027-fx-mcp-client | ADR-0027 (proposed), ADR-0019 | `tests/0027-fx-mcp-client.test.mjs` | fx as an MCP client: adapter row, profile setup, doctor and remove, encoding and size guards, checks through fx | 40 | - |
 
 Groups marked "stay in place" are already one file per area; the move does not touch them. The other groups merge their source files into the one target file. 252 existing files move; the sources of every group are in review/test-layout/groups.json.
 
