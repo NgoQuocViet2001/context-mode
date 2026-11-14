@@ -48,6 +48,7 @@ This is the map. Start here, then follow the links.
 | 0019 | One interactive `context-mode setup`; npm (`context-mode`, dist-tag `next`) is the user channel; the git `release` branch stays for the Claude Code marketplace. | Accepted |
 | 0025 | Stored source enters the `ctx_execute` sandbox (#1325); the open 2.1.4 blockers (#1321, #1322, #1323, #1324) and Copilot host audit rows ship in one patch. ADR and PRD in one file. | Proposed |
 | 0026 | OMP (oh-my-pi) is the 11th agent: it runs the Pi entry through `omp/index.js` and installs with `omp plugin install context-mode`. ADR and PRD in one file. | Accepted (2026-11-14) |
+| 0027 | [fx as an MCP client](adr/0027-fx-mcp-client.md), with skills and no external hook channel; exception to ADR-0020 pending owner decision. | Proposed |
 
 ## 2a. Glossary
 

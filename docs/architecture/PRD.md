@@ -50,6 +50,8 @@ context-mode supports 11 agents (TECH-SPEC §2); OMP is the 11th (ADR-0026):
 
 No other agent ships in v2.0. No CLI and no `cli.mjs` entry (ADR-0002, ADR-0010): install, update and diagnosis run through each host's own mechanism and through the `ctx_doctor`/`ctx_upgrade` tools.
 
+Proposed, not accepted: [ADR-0027](adr/0027-fx-mcp-client.md) adds fx as an MCP client with the ctx tools and the three skills and no hooks.
+
 ```
  hooks+mcp agents (Claude Code, Codex, Gemini, Qwen, Copilot CLI, VS Code, Kiro, ZCode)
    │ hook stdin JSON                 │ MCP stdio
@@ -359,3 +361,4 @@ The module structure, dependency rules, constants, and per-module file map for i
 - 2026-10-16 (r6, `DECISIONS-r6.md` D6): §11 compaction delivery now depends on `adapters/table.ts` column `compactSummary`. Claude Code = `"host"`: inject one pointer line only. Every other agent = `"none"`: inject the 2,048 B D1 block, unchanged, through its ADR-0009 §6 path, until LV-COMPACT (M3) proves that agent's host writes its own summary. See `https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/tickets/memory-r6/eval/results.md`.
 - 2026-10-16 (r7, `https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/docs/v2/review/DECISIONS-r7.md` R1, R2): §8 `ctx_search` row states the measured recall gain for BM25+RRF (k=60) over v1 (0.48 vs 0.27) and drops MMR, which gave no gain.
 - 2026-10-16 (r8, `https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/docs/v2/review/DECISIONS-r8.md` VR): §10.2 Read row changed from hint to deny. An unranged Read of a file over `OUTPUT_CAP` is now denied; a ranged Read (`offset`/`limit`) stays a hint and is never denied.
+- 2026-11-12 (ADR-0027, proposed): §3 names the fx MCP client proposal.

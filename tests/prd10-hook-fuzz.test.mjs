@@ -1,6 +1,7 @@
 // PRD-v2 section 10 (hooks never error). One file on purpose: the seeded hook fuzz is the long pole of the parallel run (ADR-0024).
 // Moved from tests/hooks/hook-fuzz.test.mjs. Test names and bodies unchanged.
 import assert from "node:assert/strict";
+import { hookHostRows } from "./_lib/hook-hosts.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { cpus, tmpdir } from "node:os";
@@ -85,7 +86,7 @@ describe("PRD-v2 section 10: seeded hook fuzz on every host", () => {
   const PREFIX = Object.fromEntries(ADAPTERS.map((a) => [a.id, a.toolNamePrefix]));
   const SHELL = Object.fromEntries(ADAPTERS.map((a) => [a.id, a.nativeTools.shell ?? []]));
   const READ = Object.fromEntries(ADAPTERS.map((a) => [a.id, a.nativeTools.read ?? []]));
-  const HOSTS = ADAPTERS.map((a) => a.id);
+  const HOSTS = hookHostRows().map((a) => a.id);
 
   // Per host: the payload key set and the native event names.
   const SNAKE = { event: "hook_event_name", session: "session_id", tool: "tool_name", input: "tool_input", result: "tool_response", prompt: "prompt", cwd: "cwd" };

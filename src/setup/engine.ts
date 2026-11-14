@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { claudeDirOf, codexDirOf, codexPluginHomeOf, copilotDirOf, dataRootOf, geminiDirOf, kiroDirOf, opencodeDirOf } from "../core/project/config-dir.ts";
-import { AGENT_HOME_DIR, D2_NODE_DETAIL, D2_NODE_FIX, D2_SQLITE_DETAIL, D2_SQLITE_FIX, DB_FILE_NAME, MCP_ENV_FIELD, MCP_ENV_VARS_FIELD, MCP_TOOLS_FIELD, SETUP_MANIFEST_FILE, NATIVE_INSTALL, OPENCODE_CONFIG_FILES, OPENCODE_PLUGIN_KEY, OPENCODE_PLUGINS_KEY, OPENCODE_PLUGIN_PATH, PROJECTS_DIR_NAME, SERVER_KEY, TOOL_ORDER, UPGRADE_REPORT_ONLY_REASONS } from "../core/contracts/constants.ts";
+import { AGENT_HOME_DIR, FILE_PERMISSION_MASK, FX_MCP_LAUNCH_SKIPPED, HOOK_UNAVAILABLE_DETAIL, OWN_MCP_ENTRY, D2_NODE_DETAIL, D2_NODE_FIX, D2_SQLITE_DETAIL, D2_SQLITE_FIX, DB_FILE_NAME, MCP_ENV_FIELD, MCP_ENV_VARS_FIELD, MCP_TOOLS_FIELD, SETUP_MANIFEST_FILE, NATIVE_INSTALL, OPENCODE_CONFIG_FILES, OPENCODE_PLUGIN_KEY, OPENCODE_PLUGINS_KEY, OPENCODE_PLUGIN_PATH, PROJECTS_DIR_NAME, SERVER_KEY, TOOL_ORDER, UPGRADE_REPORT_ONLY_REASONS } from "../core/contracts/constants.ts";
 import { CtxError, formatError } from "../core/contracts/errors.ts";
 import { nodeTooOld } from "../core/hooks/fallback.ts";
 import { ADAPTERS, getAdapter } from "../adapters/table.ts";
@@ -23,7 +23,8 @@ import type { AgentId, HostConfigFormat, V1Finding } from "../core/contracts/typ
 import { detectV1 } from "../core/ops/detect-v1.ts";
 import { isNativeOpencodeEntry, OPENCODE_PACKAGE_DIR_HINT, opencodeDirPlugin, opencodeDirPlugins, opencodePluginDirs, opencodeProjectDir } from "../core/ops/doctor-config.ts";
 import { atomicWriteFile, renameWithRetry, unlinkWithRetry } from "../core/ops/atomic-file.ts";
-import { editHostConfigText, hostConfigValueAt, parseHostConfig } from "../core/ops/host-config.ts";
+import { fxMcpConfigEdits, editHostConfigText, hostConfigValueAt, parseHostConfig } from "../core/ops/host-config.ts";
+import { checkFxMcp, detectFx } from "../core/ops/fx-config-check.ts";
 import { OMP_DISABLED_SERVERS_KEY, ompImportFiles, ompImportsUs } from "../core/ops/omp-import.ts";
 import { hostLayout, hostText, withLayout } from "../core/ops/host-text.ts";
 import { AGENT_FLAG, BACKUP_DIR, COMMAND_SKILLS, HOOK_BUNDLE, SERVER_BUNDLE, LOCK_FILE, SKILL_FILE, assertWritable, buildRegistry, configEdits, hookCommandString, renderSkill } from "./registry.ts";
@@ -50,7 +51,7 @@ const V1_HOOK_MARK = "context-mode hook";
 
 export type AgentStatus = "PASS" | "FAIL" | "SKIPPED";
 export interface Change { file?: string; path?: string; before?: unknown; after?: unknown; command?: string[]; }
-export interface Check { name: string; ok: boolean; warn?: boolean; detail?: string; overheadP95Ms?: number; wallP95Ms?: number; bareP95Ms?: number; }
+export interface Check { name: string; ok: boolean; warn?: boolean; detail?: string; fix?: string; overheadP95Ms?: number; wallP95Ms?: number; bareP95Ms?: number; }
 export interface AgentResult {
   id: AgentId; status: AgentStatus; reason?: string; v1: V1Finding[]; changes: Change[]; checks: Check[]; rolledBack?: boolean;
   /** OPEN-ITEMS H8, #1335: the host CLI file setup and doctor ran for this agent (absolute PATH file that passed the check). */
@@ -69,7 +70,7 @@ export interface SetupOptions extends SetupContext {
   onAgent?: (id: AgentId, phase: "start" | "done", res?: AgentResult) => void;
 }
 
-interface Entry { agent: AgentId; file?: string; existed?: boolean; backup?: string; undo?: { bin: string; args: string[] }; ran?: { bin: string; args: string[] }; }
+interface Entry { agent: AgentId; file?: string; existed?: boolean; backup?: string; mode?: number; undo?: { bin: string; args: string[] }; ran?: { bin: string; args: string[] }; }
 interface Manifest { runId: string; path: string; entries: Entry[]; }
 
 // ---------- small helpers ----------
@@ -694,6 +695,7 @@ function hookCheck(row: CheckRow, env: SetupContext["env"]): Check {
  *  #1359 D-1359-CODEX-TOOLS-1: the user's tools table (per-tool approval_mode) is kept as it is. */
 function ownConfigEdits(row: CheckRow, c: NonNullable<CheckRow["config"]>, text: string): [readonly string[], unknown][] {
   const edits = configEdits(c);
+  if (row.id === "fx") return fxMcpConfigEdits(c.file, text, c.format, c.value, edits.slice(1));
   if (row.id !== "codex" || !isObj(c.value)) return edits;
   let cur: unknown;
   try { cur = hostConfigValueAt(parseHostConfig(row.id, c.file, text, c.format), c.key); } catch { return edits; }
@@ -721,6 +723,7 @@ function parseCheck(row: CheckRow): Check {
  *  edit left means the entry is there); a package channel is registered when the host list command shows it. */
 function hookRegisteredCheck(row: CheckRow, env: SetupContext["env"], list: Check | undefined): Check {
   const h = row.hookInstall;
+  if (h.kind === "none") return { name: "hook-registered", ok: true, warn: true, detail: HOOK_UNAVAILABLE_DETAIL(row.id) };
   if (h.kind === "package") {
     const l = row.listCommand;
     if (!l) return { name: "hook-registered", ok: false, detail: `no list command for ${row.id}` };
@@ -746,6 +749,7 @@ function hookRegisteredCheck(row: CheckRow, env: SetupContext["env"], list: Chec
  * resolved. The sample runs in its own temp HOME and project, so doctor never writes into the user's store.
  */
 export function hookRunsCheck(row: CheckRow, env: SetupContext["env"]): Check {
+  if (row.hookInstall.kind === "none") return { name: "hook-runs", ok: true, warn: true, detail: HOOK_UNAVAILABLE_DETAIL(row.id) };
   const root = mkdtempSync(path.join(tmpdir(), "cm-doctor-runs-"));
   try {
     const home = path.join(root, "home");
@@ -769,6 +773,7 @@ const SEEN_SQL = "SELECT 1 FROM events WHERE agent = ? LIMIT 1";
 export const NOT_SEEN_LINE = "not seen yet, run one tool call";
 /** ADR-0020 hook-seen: a journal row from this agent exists in any project db. None yet is a WARN, not a FAIL. */
 function hookSeenCheck(row: CheckRow, dataRoot: string): Check {
+  if (row.hookInstall.kind === "none") return { name: "hook-seen", ok: true, warn: true, detail: HOOK_UNAVAILABLE_DETAIL(row.id) };
   const base = path.join(dataRoot, PROJECTS_DIR_NAME);
   const dirs = existsSync(base) ? readdirSync(base) : [];
   let sqlite: typeof import("node:sqlite") | undefined;
@@ -1180,13 +1185,22 @@ function listOnce(row: CheckRow, env: SetupContext["env"]): () => ListState {
 
 async function verifyRow(row: CheckRow, ctx: SetupContext, list: () => ListState = () => listState(row, ctx.env)): Promise<Check[]> {
   const env = ctx.env;
-  const checks: Check[] = [parseCheck(row)];
+  const parse = parseCheck(row);
+  const checks: Check[] = [parse];
   const ls = list();
   const l = ls.check;
   if (l) checks.push(l);
   const cp = copyCheck(row, ctx.pkgDir);
   if (cp) checks.push(cp);
-  checks.push(await mcpCheck(row.serverCommand, env));
+  const mcp = await mcpCheck(row.serverCommand, env);
+  checks.push(mcp);
+  if (row.id === "fx" && row.config) {
+    // D-FX-MCP-1: parseCheck established the expected Node command and own bundle arguments, and the handshake above
+    // shows the server itself runs (a degraded server keeps its own detail). Only then is the entry started through fx,
+    // so fx's env filtering and startup policy are checked too; without the fx coding agent on PATH this is a WARN.
+    const native = parse.ok && mcp.ok ? checkFxMcp(env, ctx.cwd ?? process.cwd(), row.config.file, TOOL_ORDER) : { ok: false, detail: FX_MCP_LAUNCH_SKIPPED };
+    checks.push({ name: "native-mcp", ...native });
+  }
   if (row.hookCommand) checks.push(hookCheck(row, env));
   checks.push(hookRegisteredCheck(row, env, l));
   const en = hookEnabledCheck(row, ls.status);
@@ -1214,7 +1228,8 @@ class Run {
     if (!this.manifest) this.manifest = { runId: this.runId, path: this.dir, entries: [] };
     if (bytes !== undefined) {
       const rel = path.join(FILES, String(this.manifest.entries.length));
-      atomicWrite(path.join(this.dir, rel), bytes);
+      atomicWrite(path.join(this.dir, rel), bytes, OWN_MCP_ENTRY[e.agent]?.permissions ?? {});
+      if (OWN_MCP_ENTRY[e.agent]?.permissions && e.file && existsSync(e.file)) e.mode = statSync(e.file).mode & FILE_PERMISSION_MASK;
       e.backup = rel;
     }
     this.manifest.entries.push(e);
@@ -1232,7 +1247,7 @@ function undo(dir: string, entries: Entry[], env: SetupContext["env"]): void {
   for (const e of [...entries].reverse()) {
     if (e.undo) { runBin(e.undo.bin, e.undo.args, env); continue; }
     if (!e.file) continue;
-    if (e.existed && e.backup) atomicWrite(e.file, readFileSync(path.join(dir, e.backup), "utf8"));
+    if (e.existed && e.backup) atomicWrite(e.file, readFileSync(path.join(dir, e.backup), "utf8"), e.mode === undefined ? {} : { fileMode: e.mode });
     else unlinkWithRetry(e.file); // D-WIN-ATOMIC-4
   }
 }
@@ -1266,8 +1281,12 @@ function agentHomeDir(id: AgentId, ctx: SetupContext): string {
 }
 
 export function detectAgents(reg: CheckRow[], ctx: SetupContext): AgentId[] {
-  return reg.filter((r) => existsSync(agentHomeDir(r.id, ctx))
-    || (r.listCommand && which(r.listCommand.bin, ctx.env))).map((r) => r.id);
+  return reg.filter((r) => {
+    const configured = existsSync(agentHomeDir(r.id, ctx));
+    // A file named ~/.fx is not an fx profile: setup could not create ~/.fx/mcp.json under it.
+    if (r.id === "fx") return detectFx(ctx.env, ctx.cwd ?? process.cwd(), configured && statSync(agentHomeDir(r.id, ctx)).isDirectory());
+    return configured || (r.listCommand && which(r.listCommand.bin, ctx.env));
+  }).map((r) => r.id);
 }
 
 // ---------- entry points ----------
@@ -1332,7 +1351,11 @@ async function setupRow(row: CheckRow, ctx: SetupContext, run: Run, dryRun: bool
     const listed = ls.check?.ok === true;
     plan = planRow(row, listed, copyCheck(row, ctx.pkgDir)?.ok === false, ctx.env, listed && ls.status === "disabled");
     if (row.id === "omp") planOmpImport(row, plan.edits, ctx);
-  } catch (e) { return { ...res, status: "FAIL", reason: (e as Error).message }; }
+  } catch (e) {
+    // D-FX-MCP-1: a refusal names its own fix (an fx entry the user disabled); setup again would refuse the same way.
+    const fix = (e as { fix?: unknown }).fix;
+    return { ...res, status: "FAIL", reason: (e as Error).message, ...(typeof fix === "string" ? { fix } : {}) };
+  }
   // The config entry is current when the plan changes nothing in that file but codex trust entries.
   const configEdited = (file: string): boolean => plan.edits.some((e) => e.file === file && e.changes.some((c) => !isTrust(row, c)));
   res.v1 = detectV1(row.id, ctx.home, { claudeDir: claudeDirOf(ctx.env, ctx.home), codexDir: codexDirOf(ctx.env, ctx.home), geminiDir: geminiDirOf(ctx.env, ctx.home), copilotDir: copilotDirOf(ctx.env, ctx.home), kiroDir: kiroDirOf(ctx.env, ctx.home), opencodeDir: opencodeDirOf(ctx.env, ctx.home) }).filter((f) => !(row.config && f.file === row.config.file && !configEdited(f.file)));
@@ -1343,7 +1366,7 @@ async function setupRow(row: CheckRow, ctx: SetupContext, run: Run, dryRun: bool
       assertWritable(row, e.file);
       const raw = readRaw(e.file); // the backup holds the bytes as they were, BOM and CRLF included
       run.record({ agent: row.id, file: e.file, existed: raw !== undefined }, raw);
-      atomicWrite(e.file, e.plain || raw === undefined ? e.after : withLayout(e.after, hostLayout(raw)));
+      atomicWrite(e.file, e.plain || raw === undefined ? e.after : withLayout(e.after, hostLayout(raw)), e.file === row.config?.file ? OWN_MCP_ENTRY[row.id]?.permissions ?? {} : {});
     }
     for (const args of plan.cli) {
       const r = runBin(row.cli!.bin, args, ctx.env, row.cli!.input ?? "", INSTALL_TIMEOUT_MS);
@@ -1373,7 +1396,8 @@ async function setupRow(row: CheckRow, ctx: SetupContext, run: Run, dryRun: bool
     if (keep) return { ...res, status: "FAIL", reason: `${bad[0].name}: ${bad[0].detail}`, fix: keep };
     if (bad.length) throw new Error(bad.map((c) => `${c.name}: ${c.detail}`).join("; "));
   } catch (e) {
-    const fix = fixLineOf(row); // before the rollback: it reads the files as setup left them
+    // D-FX-MCP-1: a failed check can name its own fix (fx rejected the profile; setup again cannot fix that).
+    const fix = fixLineOf(row) ?? res.checks.find((c) => !c.ok && c.fix !== undefined)?.fix; // before the rollback: it reads the files as setup left them
     run.rollback(row.id, ctx.env);
     // D-SETUP-HOST-BROKEN-1: the host broke on the install step itself (the list passed): the same SKIPPED line.
     const broken = row.cli ? hostBroken(row.cli.bin, (e as Error).message) : undefined;
@@ -1415,7 +1439,7 @@ export async function runDoctor(opts: SetupOptions): Promise<SetupResult> {
       else {
         res.checks = await verifyRow(row, ctx, list);
         const bad = res.checks.filter((c) => !c.ok);
-        if (bad.length) { res.status = "FAIL"; res.reason = bad.map((c) => `${c.name}: ${c.detail}`).join("; "); const fix = fixLineOf(row); if (fix) res.fix = fix; }
+        if (bad.length) { res.status = "FAIL"; res.reason = bad.map((c) => `${c.name}: ${c.detail}`).join("; "); const fix = fixLineOf(row) ?? bad.find((c) => c.fix !== undefined)?.fix; if (fix) res.fix = fix; }
       }
     }
     agents.push(res);

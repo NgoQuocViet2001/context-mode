@@ -8,10 +8,12 @@ import { getStaticTOMLValue, parseTOML } from "toml-eslint-parser";
 import type { AST } from "toml-eslint-parser";
 import {
   AGENT_ARG, HOST_CONFIG_TEXT_PATH, HOST_NODE_COMMAND, JSON_INDENT_UNIT, JSONC_EXT,
-  MCP_ARGS_FIELD, MCP_COMMAND_FIELD, NPM_VERSION_SEP, OPENCODE_CONFIG_FILES, OPENCODE_GIT_SPEC, OPENCODE_NPM_LATEST,
+  MCP_ARGS_FIELD, MCP_COMMAND_FIELD, MCP_ENV_FIELD, NPM_VERSION_SEP, OPENCODE_CONFIG_FILES, OPENCODE_GIT_SPEC, OPENCODE_NPM_LATEST,
   OPENCODE_NPM_SPEC_PREFIX, OPENCODE_PACKAGE_FIELD, OPENCODE_PLUGIN_KEY, OWN_MCP_ENTRY, PI_GIT_PACKAGE, PI_NPM_LATEST,
   PI_PACKAGE_SOURCE_KEY, PI_PACKAGES_KEY, SERVER_ENTRY_FILE, TOML_EXT, V1_PATH_SEPS, V1_PI_PACKAGE,
-  EXE_SUFFIX,
+  EXE_SUFFIX, SERVER_KEY, DATA_DIR_ENV, FX_ENVIRONMENT_FIELD, FX_MCP_CONTAINER, FX_MCP_SERVERS_CONTAINER, FX_ENTRY_DISABLED, FX_ENTRY_TRANSPORT, FX_ENTRY_URL, FX_ENTRY_ENVIRONMENT, FX_CONFIG_OBJECT, FX_CONFIG_CONTAINER_OBJECT,
+  FX_ENABLED_FIELD, FX_TYPE_FIELD, FX_URL_FIELD, FX_STDIO_TYPES, FX_ENABLE_FIX, FX_CONFIG_REVIEW, FX_PROFILE_FIX, FX_CONFIG_PARSE,
+  FX_REQUIRED_FIELD, FX_ENTRY_RANGES, FX_ENTRY_VALUE, FX_ENTRY_VALUE_FIX, FX_PROFILE_MAX_BYTES, FX_CONFIG_BOM, FX_BOM_FIX, FX_CONFIG_TOO_LARGE, FX_SIZE_FIX,
 } from "../contracts/constants.ts";
 import { CtxError } from "../contracts/errors.ts";
 import { atomicWriteFile } from "./atomic-file.ts";
@@ -234,12 +236,28 @@ export function tomlHeaderText(path: readonly string[]): string {
   return "[" + path.map(tomlHeaderKey).join(".") + "]";
 }
 
+// fx's native JSON parser rejects duplicate keys, whereas JSON.parse keeps the last.
+// Check the parsed scanner tree only for fx so an edited document cannot be a host-invalid false PASS.
+function assertUniqueKeys(node: Node): void {
+  if (node.kind === "object") {
+    const seen = new Set<string>();
+    for (const member of node.members) {
+      if (seen.has(member.key)) throw new SyntaxError("duplicate JSON key");
+      seen.add(member.key);
+      assertUniqueKeys(member.node);
+    }
+  } else if (node.kind === "array") for (const item of node.items) assertUniqueKeys(item);
+}
+
 // ------------------------------------------------------------------------------------------ parse API
 
 /** Parse a host config text; any syntax error is CONFIG_PARSE_FAILED (impl/07 §2 Errors). Empty text is {}. */
 export function parseHostConfig(agent: AgentId, path: string, text: string, format: HostConfigFormat): unknown {
   try {
-    return format === "toml" ? scanToml(text).value : scanJson(text, format).value;
+    if (format === "toml") return scanToml(text).value;
+    const doc = scanJson(text, format);
+    if (agent === "fx" && doc.root !== null) assertUniqueKeys(doc.root);
+    return doc.value;
   } catch {
     throw new CtxError("CONFIG_PARSE_FAILED", { agent, path, format });
   }
@@ -430,6 +448,94 @@ function setText(agent: AgentId, path: string, text: string, format: HostConfigF
   }
 }
 
+/** D-FX-MCP-1: why setup leaves an fx profile alone, and the Fix: line that resolves it (never "run setup again"). */
+export interface FxIssue { detail: string; fix: string; }
+
+/** A refusal setup and ctx_upgrade raise for an fx profile; the setup result carries `fix` as its Fix: line. */
+export function fxRefusal(issue: FxIssue): Error & { fix: string } {
+  return Object.assign(new Error(issue.detail), { fix: issue.fix });
+}
+
+/** An existing fx entry setup must not overwrite to report a successful install: the user's disable or transport
+ *  choice, or a value fx itself would skip (fx src/core/mcp/project_config.zig parseServerEntry). */
+export function fxMcpEntryIssue(entry: unknown, file: string): FxIssue | undefined {
+  if (!isPlainObject(entry)) return undefined;
+  if (Object.hasOwn(entry, FX_ENABLED_FIELD) && entry[FX_ENABLED_FIELD] !== true) return { detail: FX_ENTRY_DISABLED(file), fix: FX_ENABLE_FIX(file) };
+  const skipped = (field: string): FxIssue => ({ detail: FX_ENTRY_VALUE(file, field), fix: FX_ENTRY_VALUE_FIX(file, field) });
+  if (Object.hasOwn(entry, FX_REQUIRED_FIELD) && typeof entry[FX_REQUIRED_FIELD] !== "boolean") return skipped(FX_REQUIRED_FIELD);
+  for (const [field, min, max] of FX_ENTRY_RANGES) {
+    const v = entry[field];
+    if (Object.hasOwn(entry, field) && !(Number.isInteger(v) && (v as number) >= min && (v as number) <= max)) return skipped(field);
+  }
+  const type = entry[FX_TYPE_FIELD];
+  if (Object.hasOwn(entry, FX_TYPE_FIELD) && !(typeof type === "string" && FX_STDIO_TYPES.includes(type))) return { detail: FX_ENTRY_TRANSPORT(file), fix: FX_CONFIG_REVIEW(file) };
+  if (!Object.hasOwn(entry, FX_TYPE_FIELD) && Object.hasOwn(entry, FX_URL_FIELD)) return { detail: FX_ENTRY_URL(file), fix: FX_CONFIG_REVIEW(file) };
+  const field = Object.hasOwn(entry, FX_ENVIRONMENT_FIELD) ? FX_ENVIRONMENT_FIELD : MCP_ENV_FIELD;
+  const selected = entry[field];
+  if (Object.hasOwn(entry, field) && (!isPlainObject(selected) || Object.values(selected).some(v => typeof v !== "string"))) {
+    return { detail: FX_ENTRY_ENVIRONMENT(file, field), fix: FX_CONFIG_REVIEW(file) };
+  }
+  return undefined;
+}
+
+/** A profile fx cannot read as it is on disk: over FX_PROFILE_MAX_BYTES or with a UTF-8 BOM. An absent file has none. */
+export function fxProfileBytesIssue(file: string): FxIssue | undefined {
+  let raw: Buffer;
+  try { raw = readFileSync(file); } catch { return undefined; }
+  if (raw.length > FX_PROFILE_MAX_BYTES) return { detail: FX_CONFIG_TOO_LARGE(file), fix: FX_SIZE_FIX(file) };
+  if (raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf) return { detail: FX_CONFIG_BOM(file), fix: FX_BOM_FIX(file) };
+  return undefined;
+}
+
+/** A profile setup cannot write into: not an object, or the container that holds our entry is not an object. */
+export function fxProfileIssue(parsed: unknown, file: string): FxIssue | undefined {
+  if (!isPlainObject(parsed)) return { detail: FX_CONFIG_OBJECT(file), fix: FX_PROFILE_FIX(file) };
+  const [container] = ownMcpKey("fx", parsed);
+  if (Object.hasOwn(parsed, container) && !isPlainObject(parsed[container])) return { detail: FX_CONFIG_CONTAINER_OBJECT(file, container), fix: FX_PROFILE_FIX(file) };
+  return undefined;
+}
+
+/** The key path of our entry. fx reads `mcp`, or `mcpServers` when there is no `mcp`; with both it reads only `mcp`
+ *  (fx src/core/mcp/project_config.zig), so our entry goes where fx looks. Never throws: reads of a broken profile find no entry. */
+export function ownMcpKey(agent: AgentId, parsed: unknown): readonly string[] {
+  const fallback = OWN_MCP_ENTRY[agent]?.key ?? [];
+  if (agent !== "fx") return fallback;
+  return isPlainObject(parsed) && Object.hasOwn(parsed, FX_MCP_CONTAINER) ? [FX_MCP_CONTAINER, SERVER_KEY] : fallback;
+}
+
+/** D-FX-MCP-1: keep fx's chosen container, environment alias and other entry fields while replacing our launch
+ *  fields. The selected env map carries this run's data root, or none when the run has none (the server then uses
+ *  the default root, as the CLI does); its other keys stay. */
+export function fxMcpConfigEdits(file: string, text: string, format: HostConfigFormat, expected: unknown, also: [KeyPath, unknown][] = []): [KeyPath, unknown][] {
+  const bytes = fxProfileBytesIssue(file);
+  if (bytes !== undefined) throw fxRefusal(bytes);
+  let parsed: unknown;
+  try {
+    parsed = parseHostConfig("fx", file, text, format);
+  } catch {
+    throw fxRefusal({ detail: FX_CONFIG_PARSE(file), fix: FX_PROFILE_FIX(file) });
+  }
+  const profile = fxProfileIssue(parsed, file);
+  if (profile !== undefined) throw fxRefusal(profile);
+  const key = ownMcpKey("fx", parsed);
+  const current = hostConfigValueAt(parsed, key);
+  const issue = fxMcpEntryIssue(current, file);
+  if (issue !== undefined) throw fxRefusal(issue);
+  const existing = isPlainObject(current) ? current : {};
+  const { [MCP_ENV_FIELD]: defaults, ...launch } = isPlainObject(expected) ? expected : {};
+  const value = { ...existing, ...launch };
+  const field = Object.hasOwn(existing, FX_ENVIRONMENT_FIELD) ? FX_ENVIRONMENT_FIELD : MCP_ENV_FIELD;
+  const selected = existing[field];
+  if (isPlainObject(defaults)) value[field] = { ...(isPlainObject(selected) ? selected : {}), ...defaults };
+  else if (isPlainObject(selected) && Object.hasOwn(selected, DATA_DIR_ENV)) {
+    const { [DATA_DIR_ENV]: _older, ...rest } = selected;
+    // An empty environment map still makes fx skip env, so it stays; an empty env map goes.
+    if (Object.keys(rest).length > 0 || field === FX_ENVIRONMENT_FIELD) value[field] = rest;
+    else delete value[field];
+  }
+  return [[key, value], ...also];
+}
+
 // ------------------------------------------------------------------------------------------ merge API
 
 interface OwnTarget { key: KeyPath; next(current: unknown): unknown; }
@@ -493,12 +599,14 @@ const swapField = (field: string, spec: string) => (x: unknown): unknown => (isP
 
 // D-M5-O1-4: the own entries a host config holds per agent. Hook entries ship in the release's hook files
 // (build/manifests.ts); this module regenerates the MCP entry and the plugin/package list entry.
-function ownTargets(agent: AgentId, accept: OwnAccept): OwnTarget[] {
+function ownTargets(agent: AgentId, accept: OwnAccept, parsed: unknown, file: string): OwnTarget[] {
   const mcp = OWN_MCP_ENTRY[agent];
   if (mcp !== undefined) {
     return [{
-      key: mcp.key,
+      key: ownMcpKey(agent, parsed),
       next(current) {
+        const issue = agent === "fx" ? fxMcpEntryIssue(current, file) : undefined;
+        if (issue !== undefined) throw fxRefusal(issue);
         const keep = isPlainObject(current) ? current : {};
         const node = accept.nodePath === true && isNodeCommand(keep[MCP_COMMAND_FIELD]) ? keep[MCP_COMMAND_FIELD] : HOST_NODE_COMMAND;
         return { ...keep, ...ownMcpValue(agent, node, serverScript()) };
@@ -538,9 +646,9 @@ export function editHostConfigText(agent: AgentId, path: string, text: string, f
 }
 
 /** impl/07 §2: regenerate only context-mode's own entries; every other key and user value is kept. */
-export function mergeOwnEntries(agent: AgentId, current: string, format: HostConfigFormat, row: AdapterRow, accept: OwnAccept = {}): HostConfigResult {
+export function mergeOwnEntries(agent: AgentId, current: string, format: HostConfigFormat, row: AdapterRow, accept: OwnAccept = {}, file: string = HOST_CONFIG_TEXT_PATH): HostConfigResult {
   const parsed = parseHostConfig(row.id, HOST_CONFIG_TEXT_PATH, current, format);
-  const wanted = ownTargets(agent, accept).map((t): [KeyPath, unknown] => [t.key, t.next(hostConfigValueAt(parsed, t.key))]);
+  const wanted = ownTargets(agent, accept, parsed, file).map((t): [KeyPath, unknown] => [t.key, t.next(hostConfigValueAt(parsed, t.key))]);
   return applyEdits(agent, HOST_CONFIG_TEXT_PATH, current, format, wanted);
 }
 
@@ -551,6 +659,6 @@ export function writeHostConfigEdit(_requested: string, current: HostConfigText,
   const wanted = Object.entries(patch).map(([k, v]): [KeyPath, unknown] => [[k], v]);
   const result = applyEdits(current.agent, current.path, current.text, current.format, wanted);
   if (result.edits.length === 0) return [];
-  atomicWriteFile(current.path, current.layout === undefined ? result.text : withLayout(result.text, current.layout));
+  atomicWriteFile(current.path, current.layout === undefined ? result.text : withLayout(result.text, current.layout), OWN_MCP_ENTRY[current.agent]?.permissions ?? {});
   return result.edits;
 }

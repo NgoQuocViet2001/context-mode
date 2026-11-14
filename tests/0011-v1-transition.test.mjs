@@ -440,11 +440,12 @@ describe("GP11: v1 migration setup plants detectable footprints", { concurrency:
     omp: [V1_REASON.dataRoot], // ADR-0026: v1 OMP was MCP-only; only the shared content root
   };
 
+  // fx (ADR-0027, proposed) never had a v1 install, so it has no v1 footprint to plant.
   test("[M7] v1-migration-setup/own-agent-list-matches-AGENT_IDS", () => {
-    assert.deepEqual([...SETUP_AGENT_IDS].sort(), [...AGENT_IDS].sort());
+    assert.deepEqual([...SETUP_AGENT_IDS].sort(), AGENT_IDS.filter((id) => id !== "fx").sort());
   });
 
-  for (const agent of AGENT_IDS) {
+  for (const agent of SETUP_AGENT_IDS) {
     test(`[M7] v1-migration-setup/plants-detectable-v1-footprint/${agent}`, (t) => {
       const home = tmp(t, agent);
       assert.equal(scan(t, agent, home).length, 0, "fresh home has no v1 footprint");

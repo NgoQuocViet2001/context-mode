@@ -5,9 +5,9 @@ import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 import { ADAPTERS, getAdapter } from "../adapters/table.ts";
-import { AGENT_HOME_DIR, PLUGIN_MARKETPLACE_NAME, HOST_NODE_COMMAND, HOST_PLUGINS_DIR_NAME, INSTALLED_PLUGINS_FILE, MCP_ENV_FIELD, OPENCODE_BASE_CONFIG_FILE, OWN_MCP_ENTRY, SERVER_KEY, SETUP_BACKUP_DIR_NAME, TOOL_ORDER } from "../core/contracts/constants.ts";
+import { AGENT_HOME_DIR, DATA_DIR_ENV, PLUGIN_MARKETPLACE_NAME, HOST_NODE_COMMAND, HOST_PLUGINS_DIR_NAME, INSTALLED_PLUGINS_FILE, MCP_ENV_FIELD, OPENCODE_BASE_CONFIG_FILE, OWN_MCP_ENTRY, SERVER_KEY, SETUP_BACKUP_DIR_NAME, TOOL_ORDER } from "../core/contracts/constants.ts";
 import type { AgentId, AdapterRow, HostConfigFormat } from "../core/contracts/types.ts";
-import { claudeDirOf, claudeProfileEnv, copilotDirOf, geminiDirOf, kiroDirOf, opencodeDirOf, ownMcpFileOf } from "../core/project/config-dir.ts";
+import { claudeDirOf, claudeProfileEnv, copilotDirOf, dataRootOf, geminiDirOf, kiroDirOf, opencodeDirOf, ownMcpFileOf } from "../core/project/config-dir.ts";
 import { ownMcpValue } from "../core/ops/host-config.ts";
 import { ompImportFiles } from "../core/ops/omp-import.ts";
 import { HOOK_SHAPES, type JsonObject } from "./hook-shapes.ts";
@@ -49,7 +49,8 @@ export interface HookFile { file: string; mode: "rewrite" | "drop"; }
 export type HookInstall =
   | { kind: "file"; file: string; shape: JsonObject; command: string; trust?: string }
   | { kind: "plugin-list"; file: string; key: readonly string[]; entry: string; worktree: string }
-  | { kind: "package"; via: string };
+  | { kind: "package"; via: string }
+  | { kind: "none" };
 
 /** ADR-0020: the one skill channel. dir = setup writes <dir>/<name>/SKILL.md rendered with the agent's tool name
  *  prefix from the package's skills/; package = the installed package ships skills/ itself. */
@@ -223,7 +224,10 @@ function configFor(ctx: SetupContext, id: AgentId): ConfigTarget | undefined {
     // entry's env table carries the Codex home setup wrote into, so the server (and its doctor) reads the same dir.
     const codexHome = id === "codex" ? ctx.env[CODEX_HOME_ENV] : undefined;
     const base = ownMcpValue(id, node, server);
-    const value = codexHome !== undefined && codexHome !== "" ? { ...base, [MCP_ENV_FIELD]: { [CODEX_HOME_ENV]: codexHome } } : base;
+    let value = codexHome !== undefined && codexHome !== "" ? { ...base, [MCP_ENV_FIELD]: { [CODEX_HOME_ENV]: codexHome } } : base;
+    // fx starts stdio children with an allowlist. Persist the selected data root so its MCP
+    // tools and the context-mode CLI open the same store, even after restarting fx.
+    if (id === "fx" && ctx.env[DATA_DIR_ENV]) value = { ...base, [MCP_ENV_FIELD]: { [DATA_DIR_ENV]: dataRootOf(ctx.env, ctx.home) } };
     return { file, format, key: own.key, value, ...(also ? { also } : {}) };
   }
   if (id === "opencode") { // docs/install/opencode.md: a local MCP entry in opencode.json
@@ -287,6 +291,7 @@ function hookFilesFor(ctx: SetupContext, id: AgentId): HookFile[] {
 
 function hookInstallFor(ctx: SetupContext, row: AdapterRow, command: string): HookInstall {
   const ch = row.hookChannel;
+  if (ch.kind === "none") return { kind: "none" };
   if (ch.kind === "home-file") {
     const shape = HOOK_SHAPES[row.id];
     if (!shape) throw new Error(`setup: ${row.id} has a home-file hook channel and no hook shape`);
@@ -340,7 +345,7 @@ export function buildRegistry(ctx: SetupContext): CheckRow[] {
     const writes = [
       ...(copilotSettings ? [copilotSettings] : []),
       ...(config ? [config.file] : []), ...hookFiles.map((h) => h.file),
-      ...(hookInstall.kind === "package" ? [] : [hookInstall.file]),
+      ...(hookInstall.kind === "package" || hookInstall.kind === "none" ? [] : [hookInstall.file]),
       ...(hookInstall.kind === "file" && hookInstall.trust ? [hookInstall.trust] : []),
       ...(skillInstall.kind === "dir" ? skillInstall.files.map((f) => f.file) : []),
       ...(id === "omp" ? [ompImportFiles(ctx.home).mcp] : []), // ADR-0026 decision 11: disabledServers, only when OMP imports us
@@ -352,7 +357,7 @@ export function buildRegistry(ctx: SetupContext): CheckRow[] {
       goldenPayload: golden(row, ctx.home),
     };
     if (copilotSettings) out.copilotSettings = copilotSettings;
-    if (row.installMode !== "in-process") out.hookCommand = hookCommand;
+    if (row.installMode !== "in-process" && row.hookChannel.kind !== "none") out.hookCommand = hookCommand;
     const copy = copyFor(ctx, id);
     if (copy) out.copy = copy;
     const native = NATIVE_PLUGIN[id];

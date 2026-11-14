@@ -18,6 +18,7 @@ import { runSession } from "../e2e/live/compact/session.mjs";
 import { parseTranscript, oracle, scoreRows, normalizeNumbers, toolKey } from "../bench/m2/score.mjs";
 import { TASKS as HELDOUT } from "../bench/m2/heldout/tasks.mjs";
 import { TASKS as MAIN } from "../bench/m2/main/tasks.mjs";
+import { SUITES, answerIn, cell, costs, fixture, recovery, searchSource, stats, toolResults } from "../bench/fx/run.mjs";
 
 // Concurrent: own temp dirs, no env. The M2 bench runner section is in 0012-m2-bench.test.mjs (it blocks on a build).
 describe("ADR-0012: live harness (concurrent)", { concurrency: CONC }, () => {
@@ -493,5 +494,66 @@ process.stdin.on("end", () => {
     test("live-local ci-config (node e2e/live/run.mjs --only)", () => runLocal("ci-config"));
     test("live-local release-plan-bump", () => runLocal("release-plan-bump"));
     test("live-local repo-cleanup-gate", () => runLocal("repo-cleanup-gate"));
+  });
+  // bench/fx/run.mjs (ADR-0027, proposed): the fixtures and the parsing of fx replies, with no fx and no model.
+  describe("ADR-0012 / fx bench harness", () => {
+    const run = (cwd, file) => new Promise((resolve, reject) => {
+      execFile(process.execPath, [file], { cwd, encoding: "utf8", maxBuffer: 1024 * 1024 }, (err, stdout) => (err ? reject(err) : resolve(stdout)));
+    });
+    const project = (t) => {
+      const dir = mkdtempSync(path.join(os.tmpdir(), "fx-fixture-test-"));
+      t.after(() => rmSync(dir, { recursive: true, force: true }));
+      return dir;
+    };
+
+    test("fx bench: every output size keeps the answer given by the fixture", async (t) => {
+      for (const size of ["compact", "4k", "8k", "16k", "64k", "256k"]) {
+        const dir = project(t);
+        const { expected, commands } = fixture(dir, size);
+        assert.deepEqual(commands, [{ command: "node analyze.mjs", suite: null }]);
+        const output = await run(dir, "analyze.mjs");
+        assert.deepEqual(answerIn(new Map([["one", { output: { type: "text", value: output } }]])), expected);
+        if (size === "compact") assert.ok(output.length < 500);
+        else assert.ok(Buffer.byteLength(output) >= Number.parseInt(size) * 1024);
+      }
+    });
+
+    test("fx bench: the session case runs four suites and each result line names its suite", async (t) => {
+      const dir = project(t);
+      const { expected, commands } = fixture(dir, "session");
+      assert.deepEqual(commands.map((c) => c.suite), SUITES);
+      const outputs = await Promise.all(commands.map((c) => run(dir, c.command.split(" ")[1])));
+      const results = new Map(outputs.map((value, i) => [String(i), { output: { type: "text", value } }]));
+      assert.deepEqual({ suites: SUITES.map((s) => answerIn(results, s)) }, expected);
+      assert.equal(new Set(expected.suites.map((s) => JSON.stringify(s.failures))).size, SUITES.length, "every suite has its own failures");
+    });
+
+    test("fx bench: native recovery waits for a running shell before reading retained output", () => {
+      const shell = (value) => new Map([["one", { toolName: "shell", output: { type: "json", value: JSON.stringify(value) } }]]);
+      assert.deepEqual(recovery(shell({ state: "running", session_id: "s1" })), ["shell", { action: "interact", session_id: "s1", yield_time_ms: 30000 }]);
+      assert.deepEqual(recovery(shell({ state: "completed", exit_code: 0, output_truncated: true, full_output_handle: "h1" })), ["read_tool_result", { handle: "h1", query: "RESULT" }]);
+      assert.throws(() => recovery(shell({ exit_code: 1 })), /did not finish/);
+    });
+
+    test("fx bench: tool results are counted once across replayed messages, and incomplete JSON fails", () => {
+      const result = { type: "tool-result", toolCallId: "a", output: { type: "text", value: 'RESULT {"failed":3' } };
+      const results = toolResults({ prompt: [{ content: [result] }, { content: [result] }] });
+      assert.equal(results.size, 1);
+      assert.equal(answerIn(results), null);
+      assert.equal(searchSource(new Map([["cm", { output: { type: "text", value: 'ctx_search({queries:["RESULT"], source:"ctx_execute:node analyze.mjs"})' } }]])), "ctx_execute:node analyze.mjs");
+      assert.deepEqual(stats([20, 10, 30]), { median: 20, min: 10, max: 30 });
+      assert.equal(cell([7, 7, 7]), "7");
+      assert.equal(cell([689, 688, 690]), "689 [688,690]");
+    });
+
+    test("fx bench: tool text splits into command output and tool discovery, request bytes by kind", () => {
+      const results = new Map([
+        ["a", { toolName: "capability_search", output: { type: "text", value: "x".repeat(40) } }],
+        ["b", { toolName: "mcp_select_tool", output: { type: "text", value: "y".repeat(2) } }],
+        ["c", { toolName: "mcp_context-mode_ctx_execute", output: { type: "text", value: "RESULT {}" } }],
+      ]);
+      const requests = [{ kind: "main", bytes: 100 }, { kind: "permission", bytes: 30 }, { kind: "main", bytes: 50 }, { kind: "title", bytes: 5 }];
+      assert.deepEqual(costs(results, requests), { outputBytes: 9, discoveryBytes: 42, mainBytes: 150, permissionBytes: 30, titleBytes: 5 });
+    });
   });
 });

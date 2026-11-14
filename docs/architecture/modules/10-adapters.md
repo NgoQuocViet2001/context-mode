@@ -37,10 +37,10 @@ export function getAdapter(id: AgentId): AdapterRow;
 - Output: `AdapterRow`.
 - Steps:
   1. Find the row in `ADAPTERS` whose `id === id`.
-  2. `AGENT_IDS` is exhaustive (10 entries), so every `AgentId` has exactly one row; no "not found" branch exists.
+  2. `AGENT_IDS` is exhaustive: eleven accepted hosts plus the proposed fx MCP client (ADR-0027). Every `AgentId` has exactly one row; no "not found" branch exists.
 - Errors: none. `AgentId` is a closed union; a value outside it is a TypeScript compile error, not a runtime case.
 - Constants used: `AGENT_IDS` (`contracts/agents.ts`).
-- E2E: GP1 (install/handshake, ×10 adapters) proves every id resolves. Covers: `src/adapters/table.ts`.
+- E2E: GP1 (install/handshake, ×10 adapters) proves every hook host id resolves; `tests/0027-fx-mcp-client.test.mjs` covers the fx row. Covers: `src/adapters/table.ts`.
 
 ### 1.3 The ten rows
 
@@ -64,6 +64,8 @@ One row per agent, PRD §3 agent list order. `installMode`, `projectSource` and 
 Citations: `installMode` — PRD §3 agent table. `projectSource` — PRD §5 table (Q11, ADR-0007); Kiro row — DECISIONS-r3 Q24 item 2. `toolNamePrefix` — TECH-SPEC §3.8 (Claude Code, Codex, Gemini, Qwen, OpenCode 2, VS Code, Pi rows are `[V]`; Copilot CLI, Kiro are `[U]`, S-NAMES, resolved here as Assumption A1 below). `codex` value is `"mcp__context_mode__"` (underscore, DECISIONS-r9 R1): Codex replaces every character that is not ASCII alnum or `_` with `_` in the server name (`codex-rs/codex-mcp/src/mcp/mod.rs:587-602` `sanitize_responses_api_tool_name`, `codex-mcp/src/tools.rs:22,140,146`; live `mcp__context_mode__ctx_execute` observed in 3 runs, `out/final/probe-codex.md` F1). `zcode` value is unverified — no source and no live probe name it; it is marked `[unverified, T-ZC]` and decided only by live test spec T-ZC (§1.5a), never by taste (DECISIONS-r9 R3). `compactDelivery` — PRD §11 delivery table. `denyChannel` — spike-hooks-verified.md §1 (Kiro: "any exit ≠0" with no structured decision field in the matrix; every other agent carries a `permissionDecision`/`decision`/`{block,reason}`/`Tool.Error` reason channel). `compactSummary` — DECISIONS-r6 D6, `https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/tickets/memory-r6/eval/results.md` ("Resume-quality eval on real compaction points"). Rule: Claude Code is `"host"` — it writes its own compact summary, so after compaction the adapter injects one pointer line only, no state block: `context-mode: earlier work of this session is in ctx_resume (state block) and ctx_search(scope:"session", sort:"timeline").` The 2,048 B block stays available on demand through `ctx_resume()` with no `seq`. Every other agent is `"none"` — the adapter injects the 2,048 B D1 block through its own `compactDelivery` path (ADR-0009 §6) — until a per-agent live check LV-COMPACT (milestone M3) shows that agent's host writes its own summary, at which point its row flips to `"host"`. The D1 algorithm and constants (`COMPACTION_BUDGET_BYTES` etc., see `impl/06-tools-session.md`) do not change for either value.
 
 Note (DECISIONS-r9 V9): Claude Code's `compactSummary: "host"` row stays `"host"` only until live test spec T-CMP runs (`DECISIONS-r9` V9, arms B1-B3/B5). If arm (a) of T-CMP fails, the `claude-code` row flips to `"none"` in the same commit that records the failure — no separate migration step.
+
+The proposed fx row (ADR-0027) uses `mcp-entry`, `spawn-cwd`, the `mcp_context-mode_` tool prefix and `.fx/skills`. It has no event map and hook channel `none`.
 
 ### 1.3a `nativeTools` and `execReadOnlyHint` per row (DECISIONS-r9 R4, R5)
 
@@ -419,3 +421,4 @@ In-process glue only, same reasoning as Pi.
 - DECISIONS-r6 D6: added `compactSummary: "host" | "none"` to the `ADAPTERS` table (§1.3). Claude Code = `"host"` (one pointer line, no state block). Every other agent = `"none"` (full 2,048 B block through its ADR-0009 §6 path) until its own LV-COMPACT live check (M3) passes.
 - DECISIONS-r9: R1 Codex `toolNamePrefix` to `mcp__context_mode__` (underscore) everywhere in this file (§1.3, §1.3a, §1.5, §3); R3 ZCode marked `[unverified, T-ZC]` with live test spec added (§1.5a); R4 added `nativeTools` field, rewrote all host matchers as generated from `nativeTools` + `toolNamePrefix` (§1.3a, §1.5); R5 added `execReadOnlyHint` (§1.3a); R6 added Codex install/doctor note (§3); V9 added compactSummary flip note (§1.3); intern questions closed: T-ZC fixture path and `SKIPPED` rule (§1.5a, A5), Qwen shell-name live check folded into S-NAMES (§1.5b, A6).
 - M2-T2: added §1.6 (instructions + skill-exposure rows per agent) from S-COPILOT (Blocked), S-SKILLS (9/10 by source, Copilot CLI Blocked), S-ZCODE instructions row ([S] no; live probe Blocked); Assumptions A8, A9.
+- 2026-11-12 (ADR-0027, proposed): §1.2 and §1.3 name the fx row.

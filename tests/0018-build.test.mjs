@@ -3,6 +3,7 @@
 import { after, before, describe, test } from "node:test";
 import { CONC } from "./_lib/concurrency.mjs";
 import assert from "node:assert/strict";
+import { hookHostRows } from "./_lib/hook-hosts.mjs";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -539,14 +540,15 @@ describe("ADR-0018 build: package metadata and dependency use", () => {
 
   test("package-meta: description is short, names the host count, has no unmeasured number", () => {
     assert.ok(pkg.description.length <= 160, "description is " + pkg.description.length + " chars");
-    assert.ok(pkg.description.includes(ADAPTERS.length + " coding agents"), pkg.description);
+    // D-FX-MCP-1 proposes an MCP client; published host claims remain the accepted ten.
+    assert.ok(pkg.description.includes(hookHostRows().length + " coding agents"), pkg.description);
     assert.ok(!pkg.description.includes("%"), "no percentage: it is not in bench/evidence");
     assert.ok(!pkg.description.includes("98"), "v1 claim");
     assert.ok(!/openclaw/i.test(pkg.description));
   });
 
   test("package-meta: keywords are the supported hosts plus the generic four, nothing else", () => {
-    const hosts = ADAPTERS.map((r) => HOST_KEYWORD[r.id] ?? r.id);
+    const hosts = hookHostRows().map((r) => HOST_KEYWORD[r.id] ?? r.id);
     assert.deepEqual([...pkg.keywords].sort(), [...hosts, ...GENERIC_KEYWORDS].sort());
   });
 
@@ -717,6 +719,7 @@ describe("ADR-0019 build: host skills", () => {
     pi: "ctx_stats",
     opencode: "ctx_stats",
     omp: SHARED_STATS, // D-OMP-SKILLS-1: <plugin>/skills, bare ctx_stats
+    fx: "mcp_context-mode_ctx_stats",
   };
 
   test("[D-N5-SKILL-1] the built package's ctx-stats skill names each host's real tool once, never a doubled prefix", () => {

@@ -160,8 +160,10 @@ No cycle: contracts → store → sandbox → tools-index → tools-exec; adapte
 
 ### 3.1 Types (`src/core/contracts/types.ts`, `agents.ts`)
 
+ADR-0027 (proposed) appends `fx` as an MCP client. Its hook channel `none` is the one exception to ADR-0020.
+
 ```ts
-export const AGENT_IDS = ["claude-code","codex","gemini","qwen","copilot-cli","vscode","kiro","zcode","pi","opencode","omp"] as const; // TECH-SPEC §2; omp is the 11th (ADR-0026)
+export const AGENT_IDS = ["claude-code","codex","gemini","qwen","copilot-cli","vscode","kiro","zcode","pi","opencode","omp","fx"] as const; // TECH-SPEC §2; omp: ADR-0026; fx: ADR-0027, proposed
 export type AgentId = typeof AGENT_IDS[number];
 
 export type CanonicalEventName = "SessionStart" | "UserPromptSubmit" | "PreToolUse" | "PostToolUse"; // ADR-0001, PRD §10.1
@@ -234,6 +236,7 @@ export interface AdapterRow {
   compactSummary: "host" | "none";  // "host": host writes its own compact summary (verified by LV-COMPACT, M3); "none": inject the 2,048 B D1 block via the ADR-0009 §6 path. DECISIONS-r6 D6.
   hookTimeoutMs: number;
   denyChannel: "deny-reason" | "hint-only";
+  hookChannel: { kind: "package" | "home-file" | "in-process" | "none"; path: string }; // ADR-0020; kind none only for fx (ADR-0027, proposed)
   decode(raw: unknown): CanonicalHookEvent;
   encode(ev: CanonicalHookEvent, d: Decision, extra?: string): HookOutput;
 }
@@ -427,3 +430,4 @@ export function lintPromptText(text: string): LintResult[]; // ADR-0005: PR1 cap
 ## Changes
 
 - `AdapterRow` gains `compactSummary: "host" | "none"`, `nativeTools`, `execReadOnlyHint`; `COMPACT_POINTER_LINE` constant added; §5.3/§5.4 flows now branch by `compactSummary` (DECISIONS-r6 D6, https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/tickets/memory-r6/eval/results.md); `toolNamePrefix` comment fixes Codex to underscore form; `READ_HINT_BYTES` retired, `READ_MAX_LINES` added, §5.3 PreToolUse now denies an unranged Read (or a one-file shell dump with no bound) over `OUTPUT_CAP` instead of hinting (DECISIONS-r8); new constants `SYNC_INDEX_MAX_BYTES`, `RATIO_SECTION_DECAY`, `MAX_CANDIDATES_TOTAL`, `SEARCH_PAGE_SIZE`, `MAX_CHUNK_BYTES`, `SNIPPET_MAX_BYTES`, `REQUIRE_SECURITY_ENV`; §3.3 gains `INVALID_ARGS`, `ONE_OF_INPUT`, `SPAWN_FAILED`; A1 cites §5.5, A2 removed (source tree is §1 alone), A6 and A8 get their Windows-kill and session-id reasoning (DECISIONS-r9).
+- 2026-11-12 (ADR-0027, proposed): `AGENT_IDS` gains `fx`; §3.1 lists `AdapterRow.hookChannel`, kind `none` only for fx.

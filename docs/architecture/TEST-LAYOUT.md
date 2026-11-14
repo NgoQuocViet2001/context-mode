@@ -31,10 +31,10 @@ Status: accepted 2026-10-30, move done. Decision record: [ADR-0024](adr/0024-tes
 | e2e-gp-keep | TECH-SPEC GP2, GP4-GP10, GP-SEARCH, GP-SETUP | (stay in place) `e2e/cases/GP2-prompt-surface.e2e.mjs`, `e2e/cases/GP4-execute.e2e.mjs`, `e2e/cases/GP5-index-search.e2e.mjs`, `e2e/cases/GP6-journal-resume.e2e.mjs`, `e2e/cases/GP7-scope.e2e.mjs`, `e2e/cases/GP8-concurrency.e2e.mjs`, `e2e/cases/GP9-lifecycle.e2e.mjs`, `e2e/cases/GP10-stats.e2e.mjs`, `e2e/cases/GP-SEARCH-heldout.e2e.mjs`, `e2e/cases/GP-SETUP-npm-install.e2e.mjs` | one file per GP case already; stay in place | 118 | 253.0 |
 | 0003-e2e-harness | ADR-0003 | (stay in place) `e2e/harness/normalize.test.mjs`, `e2e/harness/run-filter.test.mjs` | tests of the e2e harness itself (stay in place under e2e/, never import src/) | 15 | 0.2 |
 | 0012-live-eval-selftests | ADR-0012 | (stay in place) `e2e/live/cache/analyze.test.mjs`, `e2e/live/compact-hard/score.test.mjs`, `e2e/live/routing/score.test.mjs` | scorers and analyzers of the live evals (stay in place; compact-hard is frozen) | 35 | 0.3 |
-| 0012-live-harness | ADR-0012 | `tests/0012-live-harness.test.mjs` | keyless live harness, process groups, compact eval arms, M2 bench scorer | 40 | 2.5 |
+| 0012-live-harness | ADR-0012 | `tests/0012-live-harness.test.mjs` | keyless live harness, process groups, compact eval arms, M2 bench scorer, fx bench harness | 45 | 2.5 |
 | 0012-m2-bench | ADR-0012 | `tests/0012-m2-bench.test.mjs` | M2 bench fixtures runner and the bench suite result checks (builds the bundle with a blocking execFileSync; own file so it cannot stall the timer tests) | 4 | 4.4 |
 | 0017-v1-retention | ADR-0017 | `tests/0017-v1-retention.test.mjs` | v1 vs v2 diff and the ported v1 executor and store tests | 37 | 20.4 |
-| 0018-contracts | ADR-0018 | `tests/0018-contracts.test.mjs` | module contracts and single-source hook file | 46 | 0.3 |
+| 0018-contracts | ADR-0018 | `tests/0018-contracts.test.mjs` | module contracts and single-source hook file | 47 | 0.3 |
 | 0018-build | ADR-0018, ADR-0019, ADR-0023 | `tests/0018-build.test.mjs` | build, generated files, host manifests, npm package | 79 | 10.1 |
 | 0002-store | ADR-0002, PRD-v2 section 4, GP8, GP9 | `tests/0002-store.test.mjs` | single DB, schema, cleanup, checkpoint, owners, lifecycle exit | 63 | 8.5 |
 | 0007-identity | ADR-0007, PRD-v2 section 5, GP7 | `tests/0007-identity.test.mjs` | project and session identity, scope, containment, per-host home dirs | 86 | 6.4 |
@@ -57,14 +57,15 @@ Status: accepted 2026-10-30, move done. Decision record: [ADR-0024](adr/0024-tes
 | 0020-fire-plugin-ext | ADR-0020 | `tests/0020-fire-plugin-ext.test.mjs` | real-agent fire tests: OpenCode, Pi, OMP, Qwen, VS Code, Z Code (split from 0020-fire: spawnSync probes block the event loop, so one file ran slower than its longest source) | 12 | 4.0 |
 | 0019-setup-engine | ADR-0019, ADR-0023, PRD-setup | `tests/0019-setup-engine.test.mjs` | interactive setup engine and its no-regex rule | 73 | 34.5 |
 | 0019-host-config | ADR-0019, ADR-0023, PRD-setup | `tests/0019-host-config.test.mjs` | host config read/write, TOML, plugin root and swap, uninstall | 121 | 1.8 |
-| 0019-cli | ADR-0019, PRD-setup | `tests/0019-cli.test.mjs` | the context-mode CLI | 59 | 35.6 |
+| 0019-cli | ADR-0019, PRD-setup | `tests/0019-cli.test.mjs` | the context-mode CLI | 60 | 35.6 |
 | 0010-doctor-upgrade | ADR-0010, PRD-v2 section 13, GP11 | `tests/0010-doctor-upgrade.test.mjs` | doctor, upgrade, release fetch, checksums, report | 124 | 12.9 |
 | 0011-v1-transition | ADR-0011, GP11 | `tests/0011-v1-transition.test.mjs` | v1 detect and remove, v1 migration | 44 | 1.7 |
 | 0013-release-main | ADR-0013, PRD-v2 section 14 | `tests/0013-release-main.test.mjs` | release to main: publish, plan-main, commit, branch protection | 43 | 22.0 |
 | 0013-release-plan | ADR-0013, ADR-0019, PRD-v2 section 14 | `tests/0013-release-plan.test.mjs` | release plan, smoke, rollback, npm publish, who gets this | 69 | 23.6 |
-| 0014-repo-hygiene | ADR-0013, ADR-0014, ADR-0015 | `tests/0014-repo-hygiene.test.mjs` | issue forms, workflows, README, secrets, removed files | 80 | 3.6 |
+| 0014-repo-hygiene | ADR-0013, ADR-0014, ADR-0015 | `tests/0014-repo-hygiene.test.mjs` | issue forms, workflows, README, secrets, removed files | 81 | 3.6 |
 | 0023-install-docs | ADR-0023, PRD-setup | `tests/0023-install-docs.test.mjs` | install docs per agent use the native install command | 44 | 0.8 |
 | 0021-cache-safety | ADR-0021 | `tests/0021-cache-safety.test.mjs` | prompt cache safety, prefix determinism, cache usage | 37 | 9.5 |
+| 0027-fx-mcp-client | ADR-0027 (proposed), ADR-0019 | `tests/0027-fx-mcp-client.test.mjs` | fx as an MCP client: adapter row, profile setup, doctor and remove, checks through fx | 28 | - |
 
 Groups marked "stay in place" are already one file per area; the move does not touch them. The other groups merge their source files into the one target file. 252 existing files move; the sources of every group are in review/test-layout/groups.json.
 
