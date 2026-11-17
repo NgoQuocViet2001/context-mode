@@ -21,9 +21,10 @@ type Schema = Readonly<Record<string, unknown>>;
 /** One host's reply rules: stdout is JSON (default) or plain text, and the schema of each event's reply. */
 export interface HostShape { stdout?: string; output: Readonly<Record<string, Schema>>; }
 
-export const HOST_SHAPES: Readonly<Record<AgentId, HostShape>> = {
+export const HOST_SHAPES: Readonly<Record<AgentId, HostShape | null>> = {
   "claude-code": claudeCode, codex, gemini, qwen, "copilot-cli": copilotCli, vscode, kiro, zcode, pi, opencode,
   omp: pi, // ADR-0026: OMP reads the Pi extension reply
+  fx: null,
 };
 
 const NOTE_KEYS = new Set(["$schema", "title", "description", "definitions", "default"]);
@@ -90,9 +91,9 @@ export function shapeErrors(schema: Schema, value: unknown, root: Schema = schem
 /** What is wrong with one hook reply for this agent and canonical event; empty when the host accepts it. */
 export function replyErrors(agent: AgentId, event: string, stdout: string): string[] {
   const host = HOST_SHAPES[agent];
-  const schema = host.output[event];
+  const schema = host?.output[event];
   if (schema === undefined) return [`${agent} has no ${event} reply schema`];
-  if (host.stdout === "text") return shapeErrors(schema, stdout);
+  if (host?.stdout === "text") return shapeErrors(schema, stdout);
   let value: unknown;
   try {
     value = JSON.parse(stdout);

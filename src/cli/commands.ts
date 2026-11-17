@@ -244,7 +244,7 @@ function list(ui: Ui): number {
   const detected = new Set(detectAgents(reg, ui.ctx));
   const rows = ADAPTERS.map((a) => ({
     id: a.id,
-    hooks: a.hookChannel.kind, // ADR-0020: every agent has a hook channel
+    hooks: a.hookChannel.kind, // ADR-0020: every agent has a hook channel; "none" only for fx (D-FX-MCP-1, proposed)
     installMode: a.installMode,
     detected: detected.has(a.id),
   }));

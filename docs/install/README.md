@@ -1,6 +1,6 @@
 # Install context-mode v2
 
-context-mode supports 11 agents. Use your agent's own install command. Each line below is the native command, then the native update command. After it, run the check: `context-mode doctor`.
+context-mode supports 11 agents. This branch also proposes the fx MCP client, with skills and no hooks (ADR-0027, pending owner decision). Use your agent's own install command. Each line below is the native command, then the native update command. After it, run the check: `context-mode doctor`.
 
 The agents with no install command of their own use the npm route: `npm i -g context-mode`, then `context-mode setup`.
 
@@ -22,9 +22,9 @@ The agents with no install command of their own use the npm route: `npm i -g con
 | OMP | `omp plugin install context-mode` | `omp plugin upgrade context-mode` |
 | OpenCode | `opencode plugin add context-mode` (1.19: `opencode plugin context-mode --global`) | `opencode plugin update` (1.19: `opencode plugin context-mode --global --force`) |
 | ZCode | `zcode plugins marketplace add mksglu/context-mode`, then `zcode plugins install context-mode@context-mode` | `zcode plugins update context-mode@context-mode` |
-| Copilot CLI, Kiro, VS Code | `npm i -g context-mode`, then `context-mode setup --agents <id>` | `context-mode upgrade` |
+| Copilot CLI, Kiro, VS Code, fx | `npm i -g context-mode`, then `context-mode setup --agents <id>` | `context-mode upgrade` |
 
-Fallback for any agent, and the only route for Copilot CLI, Kiro and VS Code:
+Fallback for any agent, and the only route for Copilot CLI, Kiro, VS Code and fx:
 
 ```sh
 npm i -g context-mode
@@ -87,14 +87,15 @@ Each page gives one command, what setup changes, how to check it, how to remove 
 | Qwen Code | [qwen.md](./qwen.md) | `qwen extensions link` | yes, 0.26.0 |
 | VS Code (Copilot) | [vscode.md](./vscode.md) | writes the user-profile `mcp.json` (`Code/User`), hooks and skills | config only: VS Code not run |
 | ZCode | [zcode.md](./zcode.md) | writes `~/.zcode/cli/config.json` (MCP and hooks), skills | config only: ZCode not installed |
+| fx | [fx.md](./fx.md) | writes `~/.fx/mcp.json` (MCP, no hooks), skills | yes on Linux, 0.0.16 |
 
-"Checked in a clean HOME" means the command ran on macOS with a temporary HOME against the npm-packed build, the agent CLI was installed in a temporary prefix, and setup, a second setup, doctor and remove all passed. It does not mean a logged-in agent session fired the hooks: no run did that. No page is checked on Windows.
+"Checked in a clean HOME" means the command ran on macOS with a temporary HOME against the npm-packed build, the agent CLI was installed in a temporary prefix, and setup, a second setup, doctor and remove all passed. It does not mean a logged-in agent session fired the hooks: no run did that. fx was checked on Linux, against a `release-out` build. No page is checked on Windows.
 
 Each agent installs from `main` or from npm ([ADR-0023](../architecture/adr/ADR-0023-native-install.md)).
 
 ## Hooks, skills and saving
 
-Every agent gets hooks and the skills `/ctx-doctor`, `/ctx-stats`, `/ctx-upgrade` ([ADR-0020](../architecture/adr/0020-hooks-and-skills-on-every-agent.md)). Each agent has one hook channel and one saving effect. R = the call runs, then a large result is replaced. D = a large call is denied and the reason names `ctx_execute`.
+Every agent gets the skills `/ctx-doctor`, `/ctx-stats`, `/ctx-upgrade`, and every agent but fx gets hooks ([ADR-0020](../architecture/adr/0020-hooks-and-skills-on-every-agent.md); fx: [ADR-0027](../architecture/adr/0027-fx-mcp-client.md), proposed). Each agent with hooks has one hook channel and one saving effect. R = the call runs, then a large result is replaced. D = a large call is denied and the reason names `ctx_execute`.
 
 "Live saving" is the bytes of one large tool result that reach the model: without context-mode -> with context-mode. No run used a logged-in model session: each run piped the host's documented payload into the installed hook or plugin. Full runs: [hooks-all RESULT](https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/docs/v2/spikes/hooks-all/RESULT.md).
 
@@ -110,6 +111,7 @@ Every agent gets hooks and the skills `/ctx-doctor`, `/ctx-stats`, `/ctx-upgrade
 | ZCode | `~/.zcode/cli/config.json` `hooks` | `~/.zcode/skills` | D | pass: 169,068 -> 443 | 2026-10-26 | not installed | partly: skills dir not in docs |
 | Pi | plugin inside the agent `pi/index.js` | package `skills/` | R | pass: 200,062 -> 160 | 2026-10-26 | 0.73.1 | yes: docs shipped in the installed package |
 | OpenCode | plugin inside the agent `opencode/plugin.js` | `~/.config/opencode/skills` | D | pass: 198,645 -> 235 | 2026-10-26 | not installed | partly: plugin tool name unproven live |
+| fx | none | `~/.fx/skills` | none | no hook: native output is not replaced | 2026-11-12 | 0.0.16 | yes: fx source at v0.0.16 |
 
 ## From source
 
@@ -137,7 +139,7 @@ If you update with npm yourself (`npm i -g context-mode`), most agents need noth
 | Agent | After `npm i -g` |
 |---|---|
 | Claude Code | Claude Code runs its own copy of the plugin. Run `context-mode setup --repair` (it runs `claude plugin marketplace update context-mode` and `claude plugin update context-mode@context-mode` in the profile it found), or run those two commands yourself. `context-mode doctor` fails with this fix line while the copy is old. |
-| Codex, Copilot CLI, Gemini CLI, Kiro, OMP, OpenCode, Pi, Qwen Code, VS Code, Z Code | Nothing. Restart the agent. |
+| Codex, Copilot CLI, fx, Gemini CLI, Kiro, OMP, OpenCode, Pi, Qwen Code, VS Code, Z Code | Nothing. Restart the agent. |
 
 Run `context-mode doctor` to check. It changes nothing.
 

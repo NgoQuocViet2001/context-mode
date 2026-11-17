@@ -12,7 +12,7 @@ import { CtxError } from "../contracts/errors.ts";
 import type { AdapterRow } from "../contracts/types.ts";
 import { claudeDirOf, geminiDirOf, ownMcpFileOf, requireHomeDir, resolveConfigDir } from "../project/config-dir.ts";
 import { hostText } from "./host-text.ts";
-import { hostConfigValueAt, parseHostConfig, readHostConfig } from "./host-config.ts";
+import { ownMcpKey, hostConfigValueAt, parseHostConfig, readHostConfig } from "./host-config.ts";
 
 type RootInput = Pick<AdapterRow, "id" | "installMode">;
 
@@ -164,7 +164,7 @@ function configEntryRoot(adapter: RootInput, env: NodeJS.ProcessEnv): string {
   if (!existsSync(file)) throw missing(adapter.id, file);
   const current = readHostConfig(adapter.id, file);
   const value = parseHostConfig(adapter.id, file, current.text, current.format);
-  const args = hostConfigValueAt(value, [...spec.key, MCP_ARGS_FIELD]);
+  const args = hostConfigValueAt(value, [...ownMcpKey(adapter.id, value), MCP_ARGS_FIELD]);
   const script = Array.isArray(args) ? args[0] : undefined;
   if (typeof script !== "string" || !isAbsolute(script)) throw missing(adapter.id, file);
   return dirname(script);

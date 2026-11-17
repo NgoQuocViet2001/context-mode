@@ -74,7 +74,7 @@ Run these steps yourself before you file, in a new shell session with a temporar
    - Pi: `pi install npm:context-mode`
    - OMP: `omp plugin install context-mode`
    - OpenCode: `opencode plugin add context-mode`
-   - Copilot CLI, Kiro, VS Code, ZCode: `npm i -g context-mode` then `context-mode setup --agents <agent>`
+   - Copilot CLI, Kiro, VS Code, ZCode, fx: `npm i -g context-mode` then `context-mode setup --agents <agent>`
    - Check: `context-mode doctor --agents <agent>`
 3. The smallest file or command that shows the defect, with sizes in place of content:
    ```sh

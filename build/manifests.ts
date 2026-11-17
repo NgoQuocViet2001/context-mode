@@ -137,6 +137,7 @@ const HOOK_SHAPES: Readonly<Record<AgentId, ((row: AdapterRow) => JsonObject) | 
   pi: null,
   opencode: null,
   omp: null, // ADR-0026: in-process like pi
+  fx: null,
 };
 
 // D-FU-RM-GEMINI-1: Gemini reads only hooks/hooks.json; every other host reads hooks/<id>.json.

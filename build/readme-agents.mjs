@@ -97,8 +97,9 @@ export function agentRows() {
     const reg = byId.get(a.id);
     if (!reg) throw new Error(`setup registry has no row for ${a.id}`);
     const { rel, name, lines } = pageOf(a.id);
-    if (!(a.hookChannel.kind in HOOK_WORDS)) throw new Error(`${a.id}: unknown hook channel ${a.hookChannel.kind}`);
-    const hooks = `yes, ${HOOK_WORDS[a.hookChannel.kind]}`;
+    const channel = a.hookChannel.kind;
+    if (channel !== "none" && !(channel in HOOK_WORDS)) throw new Error(`${a.id}: unknown hook channel ${channel}`);
+    const hooks = channel === "none" ? "unavailable" : `yes, ${HOOK_WORDS[channel]}`;
     const mcp = a.installMode === "in-process" && !reg.config ? "ctx tools built into the plugin" : "yes";
     const bin = reg.nativePlugin?.bin ?? reg.cli?.bin ?? (a.installMode === "in-process" ? a.id : "");
     const cmds = agentCommands(a.id, lines, bin);

@@ -1,12 +1,14 @@
 // DEVIATIONS D-WIN-ATOMIC-1. The one place that replaces a file by rename. On Windows a rename over a file that
 // another process holds open (the host watching settings.json, antivirus, an indexer) fails with EPERM/EBUSY/EACCES;
 // the hold is short, so retry a few times, then fail with the file name and what to close.
-import { mkdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { ATOMIC_RENAME_BUSY_CODES, ATOMIC_RENAME_DELAY_MS, ATOMIC_RENAME_RETRIES, ATOMIC_TMP_MARK, ATOMIC_TMP_PREFIX } from "../contracts/constants.ts";
 
 export interface AtomicOptions {
+  fileMode?: number;
+  dirMode?: number;
   platform?: NodeJS.Platform;
   rename?: (from: string, to: string) => void;
   unlink?: (file: string) => void;
@@ -67,10 +69,11 @@ export function removeTmpFile(tmp: string, opts: AtomicOptions = {}): void {
 /** Write `text` to a tmp file next to `file`, then rename it over `file`. On failure the tmp file is removed,
  *  the old `file` is untouched, and the error names `file`. */
 export function atomicWriteFile(file: string, text: string, opts: AtomicOptions = {}): void {
-  mkdirSync(path.dirname(file), { recursive: true });
+  mkdirSync(path.dirname(file), { recursive: true, ...(opts.dirMode === undefined ? {} : { mode: opts.dirMode }) });
   const tmp = path.join(path.dirname(file), `${ATOMIC_TMP_PREFIX}${path.basename(file)}${ATOMIC_TMP_MARK}${process.pid}`);
   try {
-    writeFileSync(tmp, text);
+    writeFileSync(tmp, text, opts.fileMode === undefined ? undefined : { mode: opts.fileMode });
+    if (opts.fileMode !== undefined) chmodSync(tmp, opts.fileMode);
     renameWithRetry(tmp, file, opts);
   } catch (e) {
     removeTmpFile(tmp, opts);

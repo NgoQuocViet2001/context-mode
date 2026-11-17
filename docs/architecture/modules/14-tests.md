@@ -212,6 +212,10 @@ Every function in every other module's `impl/NN-*.md` file must name, in its own
 | GP-LIVE-HOOKS | `src/core/hooks/`, `src/entries/hook.ts` |
 | T-GS6, T-F1, T-F5, T-F3, T-ROUTE, T-PAR, T-SUB (DECISIONS-r9 §V) | `e2e/live/cases/<id-slug>.json` named in §6 "DECISIONS-r9 live case specs"; each case's own `id` field is the bare id, so a report line reads the id directly, with no lookup table needed at run time |
 
+## 10. fx (ADR-0027, proposed)
+
+`tests/_lib/hook-hosts.mjs` pins the eleven hook hosts; every check that allows hook channel `none` asserts the row is fx. fx cases: `tests/0027-fx-mcp-client.test.mjs` (adapter row, profile, skills, checks through fx, refusals, rollback) and the fx bench harness describe in `tests/0012-live-harness.test.mjs`.
+
 ## Assumptions
 
 - A1: `e2e/live/run.mjs` already exists on disk (not written by this spec); this file documents its JSON case-file contract rather than redefining the script, since TECH-SPEC §6.9 and ADR-0017 both describe behavior the script already implements (verified by reading the file).
@@ -225,3 +229,4 @@ Every function in every other module's `impl/NN-*.md` file must name, in its own
 
 - 2026-10-17: issue-row cases moved to 14a-issue-cases.md (147 cases); every issue-map row now has a verdict.
 - r9 (2026-10-16, `https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/docs/v2/review/DECISIONS-r9.md`, role S7): §6 adds the DECISIONS-r9 T-spec id-to-filename map (T-GS6, T-F1, T-F5, T-F3, T-ROUTE, T-PAR, T-SUB); §7 adds the exact G5 M0 command `npx vitest run --config tests/vitest.config.ts`; §9 adds a trace-id row for the same T-spec set; Assumptions A6 answers the GP3 fixture-recorder question — 0 of 40 fixtures exist, all must be captured live before any GP3 case runs; §4 GP3 row adds the E1-E5 v1-carve-out golden cases, the P4 parser-coverage golden cases (closes task item 8: `[[`/`((`/function-body/`case`/process-substitution/here-string/`VAR=` deny-or-allow cases), the V8 offline 25-fixture GP3 set, and the V17 `Read` glob-deny set; §4 GP5 row adds V23 (zod non-negative int rejection) and V24 (FTS5 diacritics-folding); §4 GP8 row adds V22 (project-cleanup PID/age case); §4 GP9 row adds V20 (idle-stdin CPU case); §4 GP10 row adds V18 (zero-call stats) and V19 (per-tool sum-to-total).
+- 2026-11-12 (ADR-0027, proposed): §10 fx test cases.

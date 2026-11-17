@@ -2,6 +2,7 @@
 // Area: ADR-0020 (hooks and skills on every agent): one fire matrix plus the per-shell hook command checks.
 // One file per ADR area (ADR-0024).
 import { describe, test } from "node:test";
+import { hookHostRows } from "./_lib/hook-hosts.mjs";
 import { CONC } from "./_lib/concurrency.mjs";
 import assert from "node:assert/strict";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -143,7 +144,8 @@ createInterface({ input: process.stdin }).on("line", (l) => {
 
   test("ADR-0020: --print lists the hook step and the skill step for every agent", (t) => {
     // D-N5-SKILL-1: the package layout (pi/skills holds the bare names); the repo root has no pi/skills.
-    for (const row of buildRegistry({ home: "/h", pkgDir: sandbox(t).pkgDir, env: {} })) {
+    const registry = buildRegistry({ home: "/h", pkgDir: sandbox(t).pkgDir, env: {} });
+    for (const row of hookHostRows().map((a) => registry.find((r) => r.id === a.id))) {
       const kinds = printPlan(row).steps.map((s) => s.kind);
       assert.ok(row.hookInstall, row.id + " hookInstall");
       assert.ok(row.skillInstall, row.id + " skillInstall");

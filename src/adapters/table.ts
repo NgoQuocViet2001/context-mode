@@ -14,6 +14,7 @@ import * as kiro from "./kiro.ts";
 import * as zcode from "./zcode.ts";
 import * as pi from "./pi.ts";
 import * as opencode from "./opencode.ts";
+import * as fx from "./fx.ts";
 
 const CLAUDE_EVENTS = { SessionStart: "SessionStart", UserPromptSubmit: "UserPromptSubmit", PreToolUse: "PreToolUse", PostToolUse: "PostToolUse" };
 const CLAUDE_TOOLS = { shell: ["Bash"], read: ["Read"], grep: ["Grep"], webfetch: ["WebFetch"], edit: ["Write", "Edit", "NotebookEdit"] };
@@ -121,6 +122,13 @@ export const ADAPTERS: readonly AdapterRow[] = Object.freeze([
     compactDelivery: "pi-flag", compactSummary: "none", hookTimeoutMs: IN_PROCESS_TIMEOUT_MS, denyChannel: "deny-reason",
     hookChannel: { kind: "in-process", path: "omp/index.js" }, skillChannel: { kind: "package", path: "skills" }, // D-OMP-SKILLS-1
     decode: pi.decodeOmp, encode: pi.encode, checkPermission: pi.checkPermission, // D-OMP-FIRE-1: agent omp in rows
+  },
+  {
+    id: "fx", installMode: "mcp-entry", projectSource: "spawn-cwd", toolNamePrefix: fx.TOOL_NAME_PREFIX,
+    nativeTools: { shell: ["shell"], read: ["read_file"], grep: ["grep_files"] }, execReadOnlyHint: false,
+    eventMap: {}, compactDelivery: "none", compactSummary: "none", hookTimeoutMs: HOOK_TIMEOUT_MS, denyChannel: "hint-only",
+    hookChannel: { kind: "none", path: "" }, skillChannel: { kind: "home-dir", path: ".fx/skills" },
+    decode: fx.decode, encode: fx.encode,
   },
 ] satisfies Row[]);
 

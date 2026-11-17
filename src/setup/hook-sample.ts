@@ -4,7 +4,7 @@
 // ctx_execute redirect (D rows) or replace with the ctx_search line (R rows, hasReplace). A silent answer or a
 // hook that could not resolve the project is a FAIL, never a PASS.
 import { getAdapter, hasReplace } from "../adapters/table.ts";
-import { OUTPUT_CAP } from "../core/contracts/constants.ts";
+import { HOOK_UNAVAILABLE_DETAIL, OUTPUT_CAP } from "../core/contracts/constants.ts";
 import type { AgentId } from "../core/contracts/types.ts";
 
 export const SAMPLE_FILE = "big.log";
@@ -43,6 +43,7 @@ export function hookSample(id: AgentId, cwd: string, text: string): HookSample {
   const tool = row.nativeTools.shell[0];
   const command = { command: SAMPLE_COMMAND };
   switch (id) {
+    case "fx": throw new Error(HOOK_UNAVAILABLE_DETAIL(id));
     case "claude-code":
       return { effect, payload: { hook_event_name: event, session_id: SAMPLE_SESSION, cwd, tool_name: tool, tool_input: command, tool_response: { stdout: text, stderr: "" } } };
     case "gemini":

@@ -3,6 +3,7 @@
 import { test, before, after, describe } from "node:test";
 import { CONC } from "./_lib/concurrency.mjs";
 import assert from "node:assert/strict";
+import { hookHostRows } from "./_lib/hook-hosts.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readdirSync, existsSync, readFileSync, realpathSync, statSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1135,12 +1136,12 @@ describe("PRD-v2 section 10: compaction delivery, recall and decision rows (GP6)
   });
 
   test("[M7] recall/per-agent rows follow the adapter table: recall only where UserPromptSubmit carries additionalContext", () => {
-    for (const r of ADAPTERS) {
+    for (const r of hookHostRows()) {
       const ev = { event: "UserPromptSubmit", agent: r.id, sessionId: "s", cwd: "/w", turn: 1, prompt: "p" };
       const out = r.encode(ev, { kind: "hint", text: "RECALL-PROBE", onceKey: "recall" });
       assert.equal(hasRecall(r), JSON.stringify(out).includes("RECALL-PROBE"), r.id);
     }
-    assert.deepEqual(ADAPTERS.filter((r) => !hasRecall(r)).map((r) => r.id), ["pi", "opencode", "omp"]); // D-R33-KIRO-RECALL-1; omp keeps the Pi compact path
+    assert.deepEqual(ADAPTERS.filter((r) => !hasRecall(r)).map((r) => r.id), ["pi", "opencode", "omp", "fx"]); // D-R33-KIRO-RECALL-1; omp keeps the Pi compact path; fx has no hook channel
   });
 
   // ---------- decision rows (ADR-0009 §8.2) ----------
@@ -2260,9 +2261,10 @@ describe("PRD-v2 section 10: saving decision per host (ADR-0020)", () => {
 
   const CURL = "curl -s https://x.io/a.json";
 
+  // The fx row (ADR-0027, proposed) has no hook, so no saving effect.
   test("ADR-0020: every row has exactly one saving effect and it matches the ADR table", () => {
-    assert.deepEqual(ADAPTERS.map((r) => r.id).sort(), Object.keys(SAVING).sort());
-    for (const r of ADAPTERS) assert.equal(hasReplace(r) ? "R" : "D", SAVING[r.id], r.id);
+    assert.deepEqual(hookHostRows().map((r) => r.id).sort(), Object.keys(SAVING).sort());
+    for (const r of hookHostRows()) assert.equal(hasReplace(r) ? "R" : "D", SAVING[r.id], r.id);
   });
 
   for (const id of Object.keys(SAVING)) {
@@ -2752,8 +2754,8 @@ describe("PRD-v2 section 10: host tool names in hook output", () => {
     try {
       const big = path.join(dir, "big.log");
       writeFileSync(big, "x".repeat(300 * 1024));
-      assert.equal(ADAPTERS.length, 11); // ADR-0026 T18: omp is the 11th row
-      for (const row of ADAPTERS) {
+      assert.equal(hookHostRows().length, 11);
+      for (const row of hookHostRows()) {
         const d = decide(ev(row, dir, "Read", "Read", { file_path: big }), row, []);
         assert.equal(d.kind, "deny", row.id);
         assert.equal(d.reason, READ_DENY_MESSAGE(big, 300 * 1024, row.toolNamePrefix), row.id);
@@ -2768,7 +2770,7 @@ describe("PRD-v2 section 10: host tool names in hook output", () => {
   test("all 11 hosts: parse-error and policy-unreadable denies name <prefix>ctx_*", () => {
     const old = process.env[REQUIRE_SECURITY_ENV];
     try {
-      for (const row of ADAPTERS) {
+      for (const row of hookHostRows()) {
         const parse = decide(ev(row, "/", "Bash", "Bash", { command: 'ls; rm -rf / "x' }), row, ["Bash(rm -rf:*)"]);
         assert.deepEqual(parse, { kind: "deny", reason: prefixToolNames(PARSE_ERROR_DENY_LINE, row.toolNamePrefix) }, row.id);
         assert.ok(parse.reason.includes(row.toolNamePrefix + "ctx_execute"), row.id + ": " + parse.reason);

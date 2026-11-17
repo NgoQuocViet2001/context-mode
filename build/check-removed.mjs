@@ -124,7 +124,7 @@ const ALLOWED_FILES = [
   "src/adapters/table.ts",
   "src/adapters/claude-code.ts", "src/adapters/codex.ts", "src/adapters/gemini.ts", "src/adapters/qwen.ts",
   "src/adapters/copilot-cli.ts", "src/adapters/vscode.ts", "src/adapters/kiro.ts", "src/adapters/zcode.ts",
-  "src/adapters/pi.ts", "src/adapters/opencode.ts",
+  "src/adapters/pi.ts", "src/adapters/opencode.ts", "src/adapters/fx.ts",
   // The 3 command skills and the release skill (GS5).
   ...ALLOWED_SKILL_FILES,
   ".claude/settings.json",
