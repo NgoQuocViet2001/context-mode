@@ -685,11 +685,13 @@ process.stderr.write("fx mcp: ~/.fx/mcp.json isn't valid JSON (private-environme
 
   test("fx verifies a valid native server list over 1 MiB without starting unrelated servers", async t => {
     const s = fxSandbox(t);
-    const others = Object.fromEntries(Array.from({ length: 6000 }, (_, i) => [`other-${i}`, { command: "unused" }]));
+    const own = { name: "context-mode", source: "profile", file: s.file, transport: "stdio", status: "not_started", error: null };
+    // Each list entry repeats the profile path, so the server count follows its length (a short /tmp path needs more).
+    const count = Math.ceil(1024 * 1024 / Buffer.byteLength(JSON.stringify({ ...own, name: "other-0" }))) + 1;
+    const others = Object.fromEntries(Array.from({ length: count }, (_, i) => [`other-${i}`, { command: "unused" }]));
     const before = JSON.stringify({ mcpServers: others });
     assert.ok(Buffer.byteLength(before) < C.FX_PROFILE_MAX_BYTES);
     writeFileSync(s.file, before);
-    const own = { name: "context-mode", source: "profile", file: s.file, transport: "stdio", status: "not_started", error: null };
     const servers = [...Object.keys(others).map(name => ({ ...own, name })), own];
     const listed = JSON.stringify({ servers });
     assert.ok(Buffer.byteLength(listed) > 1024 * 1024, "list output repeats the profile path for each entry");
