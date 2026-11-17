@@ -293,6 +293,7 @@ var READ_MEDIA_BY_AGENT = Object.freeze({
   qwen: READ_IMAGES_AND_PDF,
   opencode: READ_IMAGES_AND_PDF,
   pi: READ_IMAGES,
+  omp: READ_IMAGES,
   vscode: READ_IMAGES,
   zcode: READ_IMAGES,
   "copilot-cli": [],
@@ -362,7 +363,9 @@ var AGENT_HOME_DIR = Object.freeze({
   kiro: [".kiro"],
   zcode: [".zcode"],
   pi: [".pi"],
-  opencode: [".config", "opencode"]
+  opencode: [".config", "opencode"],
+  omp: [".omp"]
+  // ADR-0026: OMP data and plugins live under ~/.omp
 });
 var UPGRADE_MODES = Object.freeze(["upgrade", "uninstall"]);
 var GIT_CLONE_ARGS = Object.freeze(["clone", "--depth", "1", "--branch"]);
@@ -406,16 +409,6 @@ var UNSUPPORTED_HOSTS = Object.freeze([
     configDirs: [".cursor"],
     binaries: [],
     source: "v1.0.169:src/adapters/client-map.ts:18; detect.ts:163-165,584"
-  }),
-  unsupported({
-    id: "omp",
-    name: "OMP (oh-my-pi)",
-    clientNames: ["omp-coding-agent"],
-    envVars: [],
-    pluginPaths: [],
-    configDirs: [".omp"],
-    binaries: ["omp"],
-    source: "v1.0.169:src/adapters/client-map.ts:37; detect.ts:543 (PI_CODING_AGENT_DIR is not a signal: supported Pi reads it too)"
   }),
   unsupported({
     id: "openclaw",
@@ -478,7 +471,9 @@ var HOOK_HOST_FILE = Object.freeze({
   kiro: { root: "home", file: [".kiro", "hooks", "context-mode.json"], key: ["hooks"], shape: "kiro", timeoutKey: "timeout", matcher: false },
   zcode: { root: "home", file: [".zcode", "cli", "config.json"], key: ["hooks", "events"], shape: "zcode", timeoutKey: "timeoutMs", matcher: true },
   pi: null,
-  opencode: null
+  opencode: null,
+  omp: null
+  // ADR-0026: in-process, no hook file
 });
 var TOOL_HOOK_EVENTS = Object.freeze(["PreToolUse", "PostToolUse"]);
 var KIRO_TOOL_MATCHERS = Object.freeze([["@mcp", "mcp"], ["shell", "shell"]]);
@@ -490,6 +485,8 @@ var UPGRADE_HOST_COMMAND = Object.freeze({
   gemini: "gemini extensions update context-mode",
   qwen: "qwen extensions update context-mode",
   pi: "pi update --extensions",
+  omp: "omp plugin upgrade context-mode",
+  // ADR-0026 decision 4: OMP native update
   opencode: "opencode plugin update",
   "copilot-cli": "npm i -g context-mode && context-mode setup --agents copilot-cli",
   vscode: "npm i -g context-mode && context-mode setup --agents vscode",
@@ -655,6 +652,8 @@ var NATIVE_INSTALL = Object.freeze({
   qwen: ["qwen extensions install https://github.com/mksglu/context-mode:context-mode"],
   opencode: ["opencode plugin add context-mode"],
   pi: ["pi install npm:context-mode"],
+  omp: ["omp plugin install context-mode"],
+  // ADR-0026 decision 4: OMP native install
   "copilot-cli": ["npm i -g context-mode", "context-mode setup --agents copilot-cli"],
   vscode: ["npm i -g context-mode", "context-mode setup --agents vscode"],
   kiro: ["npm i -g context-mode", "context-mode setup --agents kiro"],
@@ -1386,6 +1385,9 @@ function readResult6(p) {
   if (p.keep === true) info.keep = true;
   return info;
 }
+function decodeOmp(raw) {
+  return { ...decode9(raw), agent: "omp" };
+}
 function decode9(raw) {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new Error("pi: hook payload is not an object");
   const p = raw;
@@ -1687,14 +1689,36 @@ var ADAPTERS = Object.freeze([
     decode: decode10,
     encode: encode10,
     toCanonicalTool
+  },
+  {
+    // ADR-0026 (D-OMP-ROW-1): OMP runs the Pi extension API in-process, so the row reuses the Pi decode, encode and
+    // permission check; tool names stay bare. Only the entry path and the skills folder are its own.
+    id: "omp",
+    installMode: "in-process",
+    projectSource: "pi:ctx.cwd",
+    toolNamePrefix: TOOL_NAME_PREFIX9,
+    nativeTools: { shell: ["bash", "powershell"], read: ["read"] },
+    execReadOnlyHint: false,
+    eventMap: { SessionStart: "session_start", UserPromptSubmit: "input", PreToolUse: "tool_call", PostToolUse: "tool_result" },
+    compactDelivery: "pi-flag",
+    compactSummary: "none",
+    hookTimeoutMs: IN_PROCESS_TIMEOUT_MS,
+    denyChannel: "deny-reason",
+    hookChannel: { kind: "in-process", path: "omp/index.js" },
+    skillChannel: { kind: "package", path: "skills" },
+    // D-OMP-SKILLS-1
+    decode: decodeOmp,
+    encode: encode9,
+    checkPermission
+    // D-OMP-FIRE-1: agent omp in rows
   }
 ]);
 var BY_ID = new Map(ADAPTERS.map((r) => [r.id, r]));
-var REPLACE_ROWS = /* @__PURE__ */ new Set(["claude-code", "gemini", "copilot-cli", "pi", "opencode"]);
+var REPLACE_ROWS = /* @__PURE__ */ new Set(["claude-code", "gemini", "copilot-cli", "pi", "opencode", "omp"]);
 function hasReplace(row) {
   return REPLACE_ROWS.has(row.id);
 }
-var DUMP_REPLACE_ROWS = /* @__PURE__ */ new Set(["claude-code", "copilot-cli", "pi"]);
+var DUMP_REPLACE_ROWS = /* @__PURE__ */ new Set(["claude-code", "copilot-cli", "pi", "omp"]);
 function dumpRunsThenReplaces(row) {
   return DUMP_REPLACE_ROWS.has(row.id) && hasReplace(row);
 }
@@ -6042,6 +6066,7 @@ function sourceOf(agent) {
     case "opencode":
       return "spawn-cwd";
     case "pi":
+    case "omp":
       return "pi:ctx.cwd";
   }
 }
@@ -6233,22 +6258,34 @@ function fileNames(name, pathExt) {
   if (!isWin() || path.extname(name) !== "") return [name];
   return [...pathExt.map((ext) => name + ext), name];
 }
-function isRunnable(full) {
-  const st = statSync3(full, { throwIfNoEntry: false });
-  if (st === void 0 || !st.isFile()) return false;
+function probe(full) {
+  let st;
+  try {
+    st = statSync3(full, { throwIfNoEntry: false });
+  } catch {
+    return "unreadable";
+  }
+  if (st === void 0 || !st.isFile()) return "absent";
   if (isWin()) {
     const ext = path.extname(full).toLowerCase();
-    return ext === "" || WIN_STARTABLE_EXT.includes(ext);
+    return ext === "" || WIN_STARTABLE_EXT.includes(ext) ? "runnable" : "absent";
   }
   try {
     accessSync(full, fsConstants.X_OK);
-    return true;
+    return "runnable";
   } catch {
-    return false;
+    return "absent";
   }
 }
+function isRunnable(full) {
+  return probe(full) === "runnable";
+}
 function findRuntime(lang, env = process.env) {
-  if (isWin() && WIN_SHELL_LANGS.includes(lang)) return findGitBash(env);
+  return lookupRuntime(lang, env).found;
+}
+function lookupRuntime(lang, env = process.env) {
+  const unreadable = [];
+  if (isWin() && WIN_SHELL_LANGS.includes(lang)) return { found: findGitBash(env), unreadable };
   const dirs = pathEntries(envValue(env, "PATH") ?? "", process.platform, path.delimiter);
   const pathExt = isWin() ? (envValue(env, "PATHEXT") ?? PATHEXT_DEFAULT).split(PATHEXT_SEPARATOR).filter((e) => e !== "") : [];
   const names = candidates(lang);
@@ -6257,13 +6294,15 @@ function findRuntime(lang, env = process.env) {
     for (const name of names) {
       for (const file of fileNames(name, pathExt)) {
         const full = path.join(dir, file);
-        if (!isRunnable(full)) continue;
-        if (!isWin() || path.extname(full) !== "") return full;
+        const state = probe(full);
+        if (state === "unreadable") unreadable.push(full);
+        if (state !== "runnable") continue;
+        if (!isWin() || path.extname(full) !== "") return { found: full, unreadable };
         if (shim === null) shim = full;
       }
     }
   }
-  return shim;
+  return { found: shim, unreadable };
 }
 function findGitBash(env) {
   const git2 = findRuntime(GIT_BIN, env);
@@ -6343,7 +6382,7 @@ function runProcess(argv, o) {
     let stopTimer;
     const kill = () => {
       if (child.pid !== void 0) killTree(child.pid);
-      if (stopTimer === void 0) stopTimer = setTimeout(() => finishHeld(), KILL_GRACE_MS);
+      if (stopTimer === void 0) stopTimer = setTimeout(() => finishHeld(true), KILL_GRACE_MS);
     };
     const onAbort = () => {
       if (killedBy !== null || settled) return;
@@ -6372,15 +6411,21 @@ function runProcess(argv, o) {
         ...held ? { held: true } : {}
       });
     };
-    const finishHeld = () => {
+    const finishHeld = (force = false) => {
       if (settled) return;
-      held = exited && killedBy === null;
-      child.stdout.destroy();
-      child.stderr.destroy();
-      if (child.pid !== void 0) killTree(child.pid);
-      settle(child.exitCode);
+      const seen = chunkCount;
+      setImmediate(() => {
+        if (settled || !force && chunkCount !== seen) return;
+        held = exited && killedBy === null && !(child.stdout.readableEnded && child.stderr.readableEnded);
+        child.stdout.destroy();
+        child.stderr.destroy();
+        if (child.pid !== void 0) killTree(child.pid);
+        settle(child.exitCode);
+      });
     };
+    let chunkCount = 0;
     const bump = () => {
+      chunkCount++;
       if (!exited || settled) return;
       clearTimeout(graceTimer);
       graceTimer = setTimeout(finishHeld, PIPE_EOF_GRACE_MS);
@@ -6398,7 +6443,7 @@ function runProcess(argv, o) {
       if (settled) return;
       exited = true;
       graceTimer = setTimeout(finishHeld, PIPE_EOF_GRACE_MS);
-      drainTimer = setTimeout(finishHeld, PIPE_DRAIN_MAX_MS);
+      drainTimer = setTimeout(() => finishHeld(true), PIPE_DRAIN_MAX_MS);
     });
     child.on("error", () => settle(null));
     child.stdin.on("error", () => {

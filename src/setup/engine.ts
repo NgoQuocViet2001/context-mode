@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { claudeDirOf, codexDirOf, codexPluginHomeOf, copilotDirOf, dataRootOf, geminiDirOf, kiroDirOf, opencodeDirOf } from "../core/project/config-dir.ts";
-import { AGENT_HOME_DIR, FILE_PERMISSION_MASK, FX_MCP_LAUNCH_SKIPPED, HOOK_UNAVAILABLE_DETAIL, OWN_MCP_ENTRY, D2_NODE_DETAIL, D2_NODE_FIX, D2_SQLITE_DETAIL, D2_SQLITE_FIX, DB_FILE_NAME, MCP_ENV_FIELD, MCP_ENV_VARS_FIELD, MCP_TOOLS_FIELD, SETUP_MANIFEST_FILE, NATIVE_INSTALL, OPENCODE_CONFIG_FILES, OPENCODE_PLUGIN_KEY, OPENCODE_PLUGINS_KEY, OPENCODE_PLUGIN_PATH, PROJECTS_DIR_NAME, SERVER_KEY, TOOL_ORDER, UPGRADE_REPORT_ONLY_REASONS } from "../core/contracts/constants.ts";
+import { AGENT_HOME_DIR, FILE_PERMISSION_MASK, FX_MCP_LAUNCH_SKIPPED, HOOK_UNAVAILABLE_DETAIL, OWN_MCP_ENTRY, D2_NODE_DETAIL, D2_NODE_FIX, D2_SQLITE_DETAIL, D2_SQLITE_FIX, DB_FILE_NAME, MCP_ENV_FIELD, MCP_ENV_VARS_FIELD, MCP_TOOLS_FIELD, SETUP_MANIFEST_FILE, NATIVE_INSTALL, OPENCODE_CONFIG_FILES, OPENCODE_PLUGIN_KEY, OPENCODE_PLUGINS_KEY, OPENCODE_PLUGIN_PATH, PROJECTS_DIR_NAME, SERVER_KEY, TOOL_ORDER, UPGRADE_KEEP_ASIDE_REASONS, UPGRADE_REPORT_ONLY_REASONS } from "../core/contracts/constants.ts";
 import { CtxError, formatError } from "../core/contracts/errors.ts";
 import { nodeTooOld } from "../core/hooks/fallback.ts";
 import { ADAPTERS, getAdapter } from "../adapters/table.ts";
@@ -479,7 +479,13 @@ function opencodeListCheck(bin: string, major: number, env: SetupContext["env"])
   const first = (s: unknown) => `${s}`.trim().split("\n")[0] ?? "";
   let out: unknown;
   try { out = JSON.parse(`${r.stdout}`); } catch { out = undefined; }
-  if (r.status !== 0) return { name: "list", ok: false, detail: `${what} exited ${r.status}: ${first(r.stderr)}` };
+  // #1386 D-1386-OC-LIST-EXIT-1: the host command itself did not run (OpenCode 2.2.6 on Termux exits 1 with "ERROR" and
+  // the reason on the next line). It says nothing about our entry, so the install checks on the files decide; the list
+  // check is a WARN that quotes the host's own lines (D-1378-GEMINI-DISK-1). A list that runs without our entry stays red.
+  if (r.status !== 0) {
+    const host = `${r.stderr}`.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 3).join(" ");
+    return { name: "list", ok: true, warn: true, detail: `${what} exited ${r.status}: ${host}; doctor checked the entry and hooks on disk` };
+  }
   if (major >= 2) {
     if (!Array.isArray(out)) return { name: "list", ok: false, detail: `${what} printed no config list: ${first(r.stdout)}` };
     const listed = out.some((d) => isObj(d) && isObj(d.info) && isObj(d.info.mcp) && isObj(d.info.mcp.servers) && isObj(d.info.mcp.servers[SERVER_KEY]));
@@ -1440,7 +1446,9 @@ export async function runDoctor(opts: SetupOptions): Promise<SetupResult> {
     if (gone.length) { res.status = "FAIL"; res.checks = [...gone, ...res.checks]; res.reason = gone.map((c) => `${c.name}: ${c.detail}`).join("; "); }
     if (res.status === "PASS") {
       // Report-only findings (shared temp file, user data dir) are never changed by setup, so they cannot be fixed by it.
-      if (res.v1.some((f) => !UPGRADE_REPORT_ONLY_REASONS.includes(f.reason))) { res.status = "FAIL"; res.reason = V1_FORM_REASON; }
+      // #1383 D-1383-DOCTOR-V1-DATA-1: a v1 data dir is user data setup keeps (ADR-0017 R6; ctx_upgrade moves it aside,
+      // D-SEC-V1-ASIDE-1), so doctor lists it in res.v1 as a note; only old forms (hooks, MCP entries) fail and name setup.
+      if (res.v1.some((f) => !UPGRADE_REPORT_ONLY_REASONS.includes(f.reason) && !UPGRADE_KEEP_ASIDE_REASONS.includes(f.reason))) { res.status = "FAIL"; res.reason = V1_FORM_REASON; }
       else if (res.changes.length && !onlyTrust(row, res.changes) && !hasPluginIssue(row)) { res.status = "FAIL"; res.reason = notSetUpReason(row, res, ctx.env); }
       else {
         res.checks = await verifyRow(row, ctx, list);

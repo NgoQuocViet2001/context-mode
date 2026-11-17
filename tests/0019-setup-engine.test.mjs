@@ -477,6 +477,30 @@ exit 0`;
     assert.ok(res.agents[0].v1.length > 0, "the temp finding is still reported");
   });
 
+  // #1383: v1.0.169 wrote ~/.claude/context-mode/sessions/stats-pid-<n>.json. Setup keeps user data (ADR-0017 R6: nothing
+  // is deleted without a prompt), so doctor names the folder as a note and the agent that setup set up stays PASS.
+  // A v1 hook is a form setup owns: it still fails doctor.
+  test("[M7] setup/doctor #1383: a v1 data dir setup keeps is a doctor note, not a FAIL; a v1 hook still fails", { skip: process.platform === "win32" && "fake agent binaries are sh scripts" }, async (t) => {
+    const { runDoctor } = await import("../src/setup/index.ts");
+    const s = sandbox(t);
+    fakeClaude(s.root, s.bin, CLAUDE_FAKE(path.join(s.root, "claude.state")));
+    const sessions = path.join(s.home, ".claude", "context-mode", "sessions");
+    put(path.join(sessions, "stats-pid-1.json"), JSON.stringify({ version: "1.0.169" }));
+    const opts = { home: s.home, pkgDir: s.pkgDir, env: s.env, agents: ["claude-code"] };
+    const set = await runSetup({ ...opts, runId: "r" });
+    assert.equal(set.agents[0].status, "PASS", JSON.stringify(set.agents[0], null, 2));
+    const doc = await runDoctor(opts);
+    assert.equal(doc.agents[0].status, "PASS", JSON.stringify(doc.agents[0], null, 2));
+    assert.equal(doc.exitCode, 0);
+    assert.ok(doc.agents[0].v1.some((f) => f.file === path.dirname(sessions)), "doctor still names the kept data dir");
+    assert.ok(existsSync(path.join(sessions, "stats-pid-1.json")), "setup keeps the user's data");
+    // Control: a v1 hook command in settings.json is an old form, so doctor fails and names setup.
+    put(path.join(s.home, ".claude", "settings.json"), JSON.stringify({ hooks: { PreToolUse: [{ hooks: [{ type: "command", command: "node /x/context-mode/hooks/pretooluse.mjs" }] }] } }));
+    const hook = await runDoctor(opts);
+    assert.equal(hook.agents[0].status, "FAIL");
+    assert.equal(hook.agents[0].reason, "old context-mode entry, run: context-mode setup");
+  });
+
   test("whichBin: on Windows only PATHEXT names match (npm's <bin>.cmd shim), PATH key in any case", (t) => {
     const s = sandbox(t);
     writeFileSync(path.join(s.bin, "claude"), "#!/bin/sh\n"); // npm also writes an sh script cmd.exe cannot run
@@ -815,6 +839,47 @@ exit 0`);
     const doc = await runDoctor({ home: s.home, pkgDir: s.pkgDir, env: s.env, agents: ["opencode"] });
     assert.equal(doc.agents[0].status, "FAIL", JSON.stringify(doc.agents[0], null, 2));
     assert.match(doc.agents[0].reason, /mcp\.servers\.context-mode.*\/elsewhere\/opencode/);
+  });
+
+  // #1386 (Android arm64, Termux, OpenCode 2): "list: opencode debug config --standalone exited 1: ERROR" (rolled back),
+  // while parse, mcp, hook-registered, hook-runs and skills passed. Real opencode 2.2.6 exits 1 with "ERROR" on the first
+  // stderr line and the reason after it (an XDG data dir it cannot write: PermissionDenied FileSystem.makeDirectory .../log).
+  // ADR-0019 verify + D-SETUP-HOST-BROKEN-1 + D-1378-GEMINI-DISK-1: a host CLI that cannot run its own list command keeps a
+  // working install; the list check is a WARN that quotes the host's own reason, and doctor names no setup loop.
+  const OC_HOST_ERR = "PlatformError: PermissionDenied: FileSystem.makeDirectory (/data/data/com.termux/files/home/.local/share/opencode/log)";
+  function fakeOpencode2Broken(s) {
+    fakeBin(s.root, "opencode", `case "$1 $2" in
+  "--version ") echo "opencode v2.2.6" ;;
+  "debug config") printf 'ERROR\\n${OC_HOST_ERR}\\n' >&2; exit 1 ;;
+esac
+exit 0`);
+    return path.join(s.home, ".config", "opencode", "opencode.json");
+  }
+
+  test("[#1386] setup: OpenCode 2 whose debug config --standalone exits 1 keeps the working install; list is a WARN with the host's reason, no rollback", { skip: process.platform === "win32" && "fake agent binaries are sh scripts" }, async (t) => {
+    const s = sandbox(t);
+    const file = fakeOpencode2Broken(s);
+    const res = await runSetup({ home: s.home, pkgDir: s.pkgDir, env: s.env, agents: ["opencode"], runId: "r" });
+    const a = res.agents[0];
+    assert.equal(a.rolledBack, undefined, JSON.stringify(a, null, 2));
+    assert.equal(a.status, "PASS", JSON.stringify(a, null, 2));
+    assert.equal(res.exitCode, 0);
+    const list = a.checks.find((c) => c.name === "list");
+    assert.ok(list && list.ok && list.warn && `${list.detail}`.includes("debug config --standalone") && `${list.detail}`.includes(OC_HOST_ERR), JSON.stringify(a.checks, null, 2));
+    for (const n of ["mcp", "hook-registered", "hook-runs"]) assert.ok(a.checks.some((c) => c.name === n && c.ok), `${n}: ${JSON.stringify(a.checks, null, 2)}`);
+    assert.ok(JSON.parse(readFileSync(file, "utf8")).mcp, "the MCP entry setup wrote stays on disk");
+  });
+
+  test("[#1386] doctor: OpenCode 2 whose debug config --standalone exits 1 passes the install checks with a WARN that quotes the host's reason, no setup fix line", { skip: process.platform === "win32" && "fake agent binaries are sh scripts" }, async (t) => {
+    const s = sandbox(t);
+    fakeOpencode2Broken(s);
+    await runSetup({ home: s.home, pkgDir: s.pkgDir, env: s.env, agents: ["opencode"], runId: "r" });
+    const doc = await runDoctor({ home: s.home, pkgDir: s.pkgDir, env: s.env, agents: ["opencode"] });
+    const a = doc.agents[0];
+    assert.equal(a.status, "PASS", JSON.stringify(a, null, 2));
+    assert.equal(a.fix, undefined, JSON.stringify(a, null, 2));
+    const list = a.checks.find((c) => c.name === "list");
+    assert.ok(list && list.ok && list.warn && `${list.detail}`.includes(OC_HOST_ERR), JSON.stringify(a.checks, null, 2));
   });
 
   // D-SETUP-HOST-BROKEN-1 (#1308): "copilot mcp add ... exited 1: GitHub Copilot CLI: no platform package found.

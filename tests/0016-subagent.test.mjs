@@ -192,8 +192,8 @@ describe("ADR-0016: subagent policy cases", { concurrency: CONC }, () => {
   });
 
   // #1342 (LV8 filled from the Claude Code 2.1.322 binary): general-purpose and fork have tools ["*"]; Explore and
-  // Plan have all tools minus their disallowedTools (no MCP removal). claude-code-guide and statusline-setup keep a
-  // fixed list with no ctx tool; an unknown name stays null -> C.
+  // Plan have all tools minus their disallowedTools (no MCP removal). claude-code-guide and statusline-setup have a
+  // fixed list with no ctx tool (D-1382-NO-ROUTE-1, so never A); an unknown name stays null -> C.
   test("#1342 built-in Claude Code types: general-purpose, fork, Explore, Plan -> ctx tools -> A", () => {
     const f = fixture();
     try {
@@ -219,6 +219,25 @@ describe("ADR-0016: subagent policy cases", { concurrency: CONC }, () => {
       assert.equal(toolSetForAgentType(sub("claude-code", "nope"), { projectDir: f.project, env: f.env }), null);
       // The built-in row keys on claude-code: a Qwen type with the same name is unchanged.
       assert.equal(toolSetForAgentType(sub("qwen", "general-purpose"), { projectDir: f.project, env: f.env }), null);
+    } finally { f.done(); }
+  });
+
+  // #1382 (ADR-0016 lines 11, 16 and 22; LV8 from the Claude Code binary): claude has tools ["*"], so it is case A.
+  // claude-code-guide, statusline-setup and web-fetch keep their fixed lists: known, not null, and no ctx tool.
+  test("#1382 built-in claude -> A; claude-code-guide, statusline-setup, web-fetch -> their fixed lists, no ctx tool", () => {
+    const f = fixture();
+    try {
+      const at = (t) => toolSetForAgentType(sub("claude-code", t), { projectDir: f.project, env: f.env });
+      const claude = at("claude");
+      assert.ok(Array.isArray(claude) && claude.includes(CC + "ctx_search"), "claude: " + JSON.stringify(claude));
+      assert.equal(pickSubagentCase(sub("claude-code", "claude"), claude), "A");
+      for (const [t, want] of [["claude-code-guide", ["Glob", "Grep", "Read", "WebFetch", "WebSearch"]], ["statusline-setup", ["Read", "Edit"]], ["web-fetch", ["WebFetch"]]]) {
+        const set = at(t);
+        assert.ok(Array.isArray(set), t + " is a known built-in: " + JSON.stringify(set));
+        for (const n of want) assert.ok(set.includes(n), t + " has " + n + ": " + JSON.stringify(set));
+        assert.equal(set.some((n) => n.includes("ctx_")), false, t + ": " + JSON.stringify(set));
+        assert.equal(set.includes("Bash"), false, t);
+      }
     } finally { f.done(); }
   });
 
@@ -378,6 +397,23 @@ describe("ADR-0016: replace pointer the caller can call (#1342, #1358)", () => {
 
   test("#1342 case A general-purpose subagent: still a replace, with the callable ctx_search pointer", async () => {
     const r = await replaced(post({ agent_id: "a1", agent_type: "general-purpose", tool_use_id: "tu-a", tool_name: "Read", tool_input: { file_path: "/big.log" }, tool_response: big(1200) }));
+    assert.ok(r.includes(CC + "ctx_search({queries:["), r);
+  });
+
+  // #1382 (ADR-0016 lines 11 and 16): a subagent with no route to the rest (no ctx tool, no shell, and no Read it can
+  // repeat with offset and limit) gets its output whole; the built-in claude (tools ["*"]) gets the ctx_search pointer.
+  const webFetch = (agent_type, n) => post({ agent_id: "a-wf-" + n, agent_type, tool_use_id: "tu-wf-" + n, tool_name: "WebFetch",
+    tool_input: { url: "https://code.claude.com/docs/en/statusline", prompt: "List every field inside context_window." },
+    tool_response: { bytes: 66464, code: 200, codeText: "OK", result: big(1200, "field"), durationMs: 900, url: "https://code.claude.com/docs/en/statusline" } });
+  test("#1382 claude-code-guide, web-fetch, statusline-setup WebFetch: the output passes whole, no dead-end replace", async () => {
+    let n = 0;
+    for (const t of ["claude-code-guide", "web-fetch", "statusline-setup"]) {
+      assert.deepEqual(await handleHook("claude-code", webFetch(t, n++), env), { stdout: "", exitCode: 0 }, t);
+    }
+  });
+
+  test("#1382 built-in claude subagent WebFetch: a replace with the callable ctx_search pointer", async () => {
+    const r = await replaced(webFetch("claude", 9));
     assert.ok(r.includes(CC + "ctx_search({queries:["), r);
   });
 
